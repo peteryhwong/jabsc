@@ -10,11 +10,13 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Logger;
+
+import com.google.common.collect.Sets;
 
 import bnfc.abs.Yylex;
 import bnfc.abs.parser;
@@ -28,9 +30,28 @@ import bnfc.abs.Absyn.Program;
  */
 public class Compiler implements Runnable {
 
+  /**
+   * Java keywords
+   */
+  public static final Set<String> JAVA_KEYWORDS =
+      Sets.newHashSet("abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
+          "class", "const", "continue", "default", "do", "double", "else", "extends", "false",
+          "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
+          "int", "interface", "long", "native", "new", "null", "package", "private", "protected",
+          "public", "return", "short", "static", "strictfp", "super", "switch", "synchronized",
+          "this", "throw", "throws", "transient", "true", "try", "void", "volatile", "while");
+  /**
+   * The default relative directory to generate Java files.
+   */
   public static final String DEFAULT_OUTPUT_DIRECTORY_NAME = "generated-sources/jabsc";
-
-  private final Logger logger = Logger.getLogger(getClass().getName());
+  /**
+   * .abs
+   */
+  private static final String ABS_FILE_EXTENSION = "abs";
+  /**
+   * .java
+   */
+  private static final String JAVA_FILE_EXTENSION = "java";
 
   /**
    * The version of JABSC Compiler.
@@ -44,10 +65,7 @@ public class Compiler implements Runnable {
         .orElse("1.x-SNAPSHOT");
   }
 
-  /**
-   * .java
-   */
-  private static final String JAVA_FILE_EXTENSION = ".java";
+  private final Logger logger = Logger.getLogger(getClass().getName());
 
   private final List<Path> sources;
   private final Path outputDirectory;
@@ -145,10 +163,10 @@ public class Compiler implements Runnable {
    */
   protected Path createSourcePath(String packageName, Path source, Path outputDirectory) {
     final String fullFileName = source.getFileName().toString();
-    int dotIndex = fullFileName.lastIndexOf('.');
+    final int dotIndex = fullFileName.lastIndexOf('.');
     final String fileName = dotIndex == -1 ? fullFileName : fullFileName.substring(0, dotIndex);
     outputDirectory = resolveOutputDirectory(packageName, outputDirectory);
-    return outputDirectory.resolve(fileName + JAVA_FILE_EXTENSION);
+    return outputDirectory.resolve(fileName + "." + JAVA_FILE_EXTENSION);
   }
 
   /**
@@ -187,7 +205,14 @@ public class Compiler implements Runnable {
   protected String getPackageName(final Prog prog) {
     Module module = prog.listmodule_.iterator().next();
     Visitor v = new Visitor(null, prog, null, new JavaTypeTranslator());
-    return v.getQTypeName(((Modul) module).qtype_).toLowerCase();
+    String pakkage = v.getQTypeName(((Modul) module).qtype_).toLowerCase();
+    if (isJavaKeyword(pakkage)) {
+      String newPakkage = pakkage + "_";
+      logger.warning(
+          String.format("Java keyword is improperly used: %s. Renamed: %s", pakkage, newPakkage));
+      return newPakkage;
+    }
+    return pakkage;
   }
 
   /**
@@ -214,16 +239,16 @@ public class Compiler implements Runnable {
    * @return
    */
   protected List<Path> createSources(List<Path> sources) {
-    Set<Path> result = new HashSet<>();
+    Set<Path> result = new TreeSet<>();
     if (sources == null || sources.isEmpty()) {
       return new ArrayList<>();
     }
     for (Path source : sources) {
       if (Files.isDirectory(source)) {
+        SourceCollector collector = new SourceCollector(ABS_FILE_EXTENSION);
         try {
-          for (Path p : Files.newDirectoryStream(source, "*.abs")) {
-            result.add(p.toAbsolutePath());
-          }
+          Files.walkFileTree(source, collector);
+          result.addAll(collector.get());
         } catch (IOException e) {
           throw new IllegalArgumentException("Source directory is not valid: " + source);
         }
@@ -261,6 +286,10 @@ public class Compiler implements Runnable {
           ? source.getParent().resolve(DEFAULT_OUTPUT_DIRECTORY_NAME).toAbsolutePath()
           : source.getParent().getParent().resolve(DEFAULT_OUTPUT_DIRECTORY_NAME).toAbsolutePath();
     }
+  }
+
+  protected static boolean isJavaKeyword(String s) {
+    return s != null && !s.trim().isEmpty() && JAVA_KEYWORDS.contains(s);
   }
 
   private static Path createPath(String source) {
