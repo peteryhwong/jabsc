@@ -4,18 +4,16 @@ import bnfc.abs.Absyn.Prog;
 import bnfc.abs.Absyn.Program;
 
 import java.nio.file.Path;
-import java.util.function.Function;
 
 public final class ProgramVisitor implements Program.Visitor<Void, Void> {
 
     private final VisitorState state;
     private final ModuleVisitor visitor;
 
-    public ProgramVisitor(Function<String, String> javaTypeTranslator, String packageName,
-        Path outputDirectory) {
+    public ProgramVisitor(String packageName, Path outputDirectory) {
         ClassFileWriterSupplier supplier =
             new ClassFileWriterSupplier(packageName, outputDirectory);
-        this.state = new VisitorState(javaTypeTranslator, supplier);
+        this.state = new VisitorState(supplier);
         this.visitor = new ModuleVisitor(state);
     }
 

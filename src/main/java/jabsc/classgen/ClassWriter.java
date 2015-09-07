@@ -27,11 +27,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 final class ClassWriter implements Closeable {
 
+    private static final String OBJECT = "java/lang/Object";
     private static final String ACTOR = "abs/api/Actor";
 
     private enum MethodType {
@@ -72,8 +72,6 @@ final class ClassWriter implements Closeable {
 
     }
 
-    private static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
-
     private final Path outputDirectory;
     private final ClassFile classFile;
     private final ConstPool constPool;
@@ -85,7 +83,7 @@ final class ClassWriter implements Closeable {
     }
 
     private static String getUnqualifiedName(ClassFile classFile) {
-        Matcher matcher = UNQUALIFIED_CLASSNAME.matcher(classFile.getName());
+        Matcher matcher = StateUtil.UNQUALIFIED_CLASSNAME.matcher(classFile.getName());
         if (!matcher.matches()) {
             throw new IllegalArgumentException();
         }
@@ -184,7 +182,7 @@ final class ClassWriter implements Closeable {
     void init(List<Param> params, List<Stm> statements, VisitorState state) {
         final Bytecode code = new Bytecode(constPool);
         code.addAload(0);
-        code.addInvokespecial("java/lang/Object", MethodInfo.nameInit, "()V");
+        code.addInvokespecial(OBJECT, MethodInfo.nameInit, "()V");
 
         if (!params.isEmpty() || !statements.isEmpty()) {
             /*
@@ -224,6 +222,9 @@ final class ClassWriter implements Closeable {
 
         descriptor.append(')');
 
+        /*
+         * null is the same as void
+         */
         if (returnType == null) {
             descriptor.append('V');
         } else {

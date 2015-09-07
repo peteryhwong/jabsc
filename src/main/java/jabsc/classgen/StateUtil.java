@@ -1,16 +1,7 @@
 package jabsc.classgen;
 
+import abs.api.Actor;
 import abs.api.Functional;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.function.Function;
-import java.util.function.Predicate;
-
-import javax.lang.model.element.Modifier;
-
 import bnfc.abs.Absyn.ClassDecl;
 import bnfc.abs.Absyn.ClassImplements;
 import bnfc.abs.Absyn.ClassParamDecl;
@@ -24,10 +15,35 @@ import bnfc.abs.Absyn.FunParDecl;
 import bnfc.abs.Absyn.InterfDecl;
 import bnfc.abs.Absyn.TypeDecl;
 import bnfc.abs.Absyn.TypeParDecl;
-import abs.api.Actor;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+
+import javax.lang.model.element.Modifier;
 
 final class StateUtil {
+    
+    static final Map<String, String> ABS_TO_JDK;
+    static final Set<String> BUILT_IN_ABS;
+    static {
+        Map<String, String> map = new HashMap<>();
+        map.put("Unit", "void");
+        map.put("String", "java/lang/String");
+        map.put("Int", "java/lang/Long");
+        map.put("Rat", "java/lang/Double");
+        map.put("Bool", "java/lang/Boolean");
+        ABS_TO_JDK = Collections.unmodifiableMap(map);
+        BUILT_IN_ABS = ABS_TO_JDK.keySet();
+    }
 
+    static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
     static final String VOID_WRAPPER_CLASS_NAME = "Void";
     static final String VOID_PRIMITIVE_NAME = "void";
     static final String LITERAL_THIS = "this";

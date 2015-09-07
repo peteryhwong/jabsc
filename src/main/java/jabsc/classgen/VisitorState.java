@@ -3,25 +3,21 @@ package jabsc.classgen;
 import bnfc.abs.Absyn.AnyIden;
 import bnfc.abs.Absyn.AnyIdent.Visitor;
 import bnfc.abs.Absyn.AnyTyIden;
-import bnfc.abs.Absyn.Decl;
 import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.Prog;
 import bnfc.abs.Absyn.QTyp;
 import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.QTypeSegmen;
-import bnfc.abs.Absyn.QTypeSegment;
 import bnfc.abs.Absyn.TTyp;
 import bnfc.abs.Absyn.TTypeSegmen;
 
-import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 
 import javax.lang.model.element.ElementKind;
 
@@ -82,7 +78,7 @@ final class VisitorState {
                  */
                 String moduleName = p.qtype_.accept(qtypeVisitor, null);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
-                VisitorState.this.imports.get(moduleName).stream().forEach(string -> {
+                VisitorState.this.moduleInfos.get(moduleName).exports.forEach(string -> {
                     arg.add(name.append(string).toString());
                     name.setLength(name.length() - string.length());
                 });
@@ -91,54 +87,66 @@ final class VisitorState {
 
         };
 
-
-    private final Set<String> moduleNames = new HashSet<>();
-    private final Map<AbsElementType, Set<Decl>> elements = new EnumMap<>(AbsElementType.class);
     private final Map<String, String> classNames = new HashMap<>();
-    private final Set<String> packageEnumImports = new HashSet<>();
-    private final Map<String, Set<String>> imports = new HashMap<>();
-    private final Map<String, Set<String>> moduleToImports = new HashMap<>();
 
-    private final QType.Visitor<String, Void> qtypeVisitor;
-    private final Function<String, String> javaTypeTranslator;
-    private final BiFunction<String, ElementKind, ClassWriter> classTranslator;
-
-    private Modul currentModule = null;
-
-    VisitorState(BiFunction<String, ElementKind, ClassWriter> classTranslator) {
-        this(Function.identity(), classTranslator);
+    private static final class ModuleInfo {
+        private String name;
+        private Set<String> exports;
+        private Set<String> imports;
+        private Map<String, String> qualifiedDeclarations;
+        private Map<String, String> nameToQualifiedName;
     }
 
-    VisitorState(Function<String, String> javaTypeTranslator,
-        BiFunction<String, ElementKind, ClassWriter> classTranslator) {
-        this.javaTypeTranslator = javaTypeTranslator;
-        this.classTranslator = classTranslator;
-        this.qtypeVisitor = (QTyp p, Void arg) -> {
-            StringBuilder sb = new StringBuilder();
-            for (QTypeSegment seg : p.listqtypesegment_) {
-                sb.append(((QTypeSegmen) seg).uident_).append('.');
-            }
-            return javaTypeTranslator.apply(sb.substring(0, sb.length() - 1));
-        };
+    private final Map<Modul, ModuleInfo> moduleInfos = new HashMap<>();
 
-        EnumSet.allOf(AbsElementType.class).stream()
-            .forEach(type -> this.elements.put(type, new HashSet<>()));
+    private final QType.Visitor<String, Boolean> qtypeVisitor = (QTyp p, Boolean arg) -> {
+
+        StringBuilder sb = new StringBuilder();
+
+        p.listqtypesegment_.forEach(s -> s.accept((QTypeSegmen seg, Void v) -> {
+            sb.append(seg.uident_).append('.');
+            return null;
+        }, null));
+
+        String type = sb.substring(0, sb.length() - 1);
+        if (!arg.booleanValue()) {
+            return type;
+        }
+
+        if (p.listqtypesegment_.size() > 1) {
+            return type;
+        }
+
+        if (StateUtil.BUILT_IN_ABS.contains(type)) {
+            return type;
+        }
+
+        ModuleInfo info = VisitorState.this.currentModule;
+        if (info.qualifiedDeclarations.containsKey(type)) {
+            return info.qualifiedDeclarations.get(type);
+        }
+
+        return info.nameToQualifiedName.get(type);
+
+    };
+    private final BiFunction<String, ElementKind, ClassWriter> classTranslator;
+
+    private ModuleInfo currentModule = null;
+
+    VisitorState(BiFunction<String, ElementKind, ClassWriter> classTranslator) {
+        this.classTranslator = classTranslator;
     }
 
     String processQType(QType type) {
-        return type.accept(this.qtypeVisitor, null);
+        return type.accept(this.qtypeVisitor, Boolean.TRUE);
     }
 
-    String getJavaType(String name) {
-        return javaTypeTranslator.apply(name);
+    Set<String> getModuleToExports(String moduleName) {
+        return moduleInfos.get(moduleName).exports;
     }
 
-    Set<String> getImports(String name) {
-        return imports.get(name);
-    }
-
-    Set<String> getModuleToImports(String name) {
-        return moduleToImports.get(name);
+    Set<String> getModuleToImports(String moduleName) {
+        return moduleInfos.get(moduleName).imports;
     }
 
     String getRefinedClassName(String name) {
@@ -149,77 +157,63 @@ final class VisitorState {
         return classTranslator.apply(name, kind);
     }
 
-    Set<Decl> getTypes(AbsElementType type) {
-        return elements.get(type);
-    }
-
     VisitorState setCurrentModule(Modul module) {
-        this.moduleNames.add(module.qtype_.accept(qtypeVisitor, null));
-        this.currentModule = module;
+        this.currentModule = moduleInfos.get(module);
         return this;
-    }
-
-    Modul getCurrentModule() {
-        return this.currentModule;
-    }
-
-    VisitorState resetCurrentModule() {
-        this.currentModule = null;
-        return this;
-    }
-
-    Set<String> getPackageEnumImports() {
-        return packageEnumImports;
-    }
-
-    private void processDeclaration(String name, Decl decl) {
-        Set<String> values = imports.get(name);
-        String declName = StateUtil.getTopLevelDeclIdentifier(decl);
-        values.add(declName);
-
-        if (StateUtil.isAbsInterfaceDecl(decl)) {
-            // 1. Interfaces
-            getTypes(AbsElementType.INTERFACE).add(decl);
-        } else if (StateUtil.isAbsClassDecl(decl)) {
-            // 2. Classes
-            Predicate<Decl> pred = StateUtil.isTheSameTopLevelDeclIdentifier(declName);
-            if (getTypes(AbsElementType.INTERFACE).stream().anyMatch(pred)) {
-                classNames.put(declName, declName + "Impl");
-            } else {
-                classNames.put(declName, declName);
-            }
-            getTypes(AbsElementType.CLASS).add(decl);
-        } else if (StateUtil.isAbsFunctionDecl(decl)) {
-            // 3. Functions
-            getTypes(AbsElementType.FUNCTION).add(decl);
-        } else if (StateUtil.isAbsDataTypeDecl(decl)) {
-            // 4. Data
-            getTypes(AbsElementType.DATA).add(decl);
-            packageEnumImports.add(StateUtil.getTopLevelDeclIdentifier(decl));
-        } else if (StateUtil.isAbsAbstractTypeDecl(decl)) {
-            // 5. Type
-            getTypes(AbsElementType.TYPE).add(decl);
-        }
-
     }
 
     VisitorState buildProgramDeclarationTypes(Prog program) {
-        Map<Modul, String> names = new HashMap<>();
 
-        program.listmodule_.stream().forEach(mod -> mod.accept((Modul m, Void v) -> {
-            String name = m.qtype_.accept(qtypeVisitor, null);
-            names.put(m, name);
-            imports.put(name, new HashSet<>());
-            m.listdecl_.stream().forEach(d -> processDeclaration(name, d));
-            return null;
-        }, null));
+        program.listmodule_.forEach(mod -> mod.accept(
+            (Modul m, Void v) -> {
+                ModuleInfo info = new ModuleInfo();
+                info.name = m.qtype_.accept(qtypeVisitor, Boolean.FALSE);
+                info.exports =
+                    m.listdecl_.stream().map(d -> StateUtil.getTopLevelDeclIdentifier(d))
+                        .collect(Collectors.toSet());
 
-        program.listmodule_.stream().forEach(mod -> mod.accept((Modul m, Void v) -> {
-            Set<String> importToModule = new HashSet<>();
-            m.listimport_.stream().forEach(im -> im.accept(importVisitor, importToModule));
-            moduleToImports.put(names.get(m), importToModule);
-            return null;
-        }, null));
+                /*
+                 * assume export *;
+                 */
+                info.qualifiedDeclarations = new HashMap<>();
+
+                StringBuilder prefix = new StringBuilder(info.name).append('.');
+                info.exports.forEach(s -> {
+                    info.qualifiedDeclarations.put(s, prefix.append(s).toString());
+                    prefix.setLength(prefix.length() - s.length());
+                });
+
+                moduleInfos.put(m, info);
+                return null;
+            }, null));
+
+        moduleInfos.keySet().forEach(m -> {
+            ModuleInfo info = moduleInfos.get(m);
+            info.imports = new HashSet<>();
+            m.listimport_.forEach(im -> im.accept(importVisitor, info.imports));
+
+            info.nameToQualifiedName = new HashMap<>();
+            info.imports.forEach(d -> {
+                Matcher mt = StateUtil.UNQUALIFIED_CLASSNAME.matcher(d);
+                mt.matches();
+                info.nameToQualifiedName.put(mt.group(1), d);
+            });
+        });
+
+        Set<String> interfaces =
+            moduleInfos.keySet().stream().map(m -> m.listdecl_).flatMap(d -> d.stream())
+                .filter(d -> StateUtil.isAbsInterfaceDecl(d))
+                .map(d -> StateUtil.getTopLevelDeclIdentifier(d)).collect(Collectors.toSet());
+
+        moduleInfos.keySet().stream().map(m -> m.listdecl_).flatMap(d -> d.stream())
+            .filter(d -> StateUtil.isAbsClassDecl(d))
+            .map(d -> StateUtil.getTopLevelDeclIdentifier(d)).forEach(c -> {
+                if (interfaces.contains(c)) {
+                    classNames.put(c, c + "Impl");
+                } else {
+                    classNames.put(c, c);
+                }
+            });
 
         return this;
     }
