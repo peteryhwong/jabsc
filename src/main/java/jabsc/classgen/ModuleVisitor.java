@@ -22,25 +22,15 @@ import bnfc.abs.Absyn.QType;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import javax.lang.model.element.ElementKind;
 
-final class ClassVisitor extends AbstractVisitor<Void, ClassWriter> {
+final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     private final VisitorState state;
 
-    ClassVisitor(Function<String, String> javaTypeTranslator,
-        BiFunction<String, ElementKind, ClassWriter> classTranslator) {
-        this.state = new VisitorState(javaTypeTranslator, classTranslator);
-    }
-
-    @Override
-    public Void visit(bnfc.abs.Absyn.Prog prog, ClassWriter arg) {
-        state.buildProgramDeclarationTypes(prog);
-        prog.listmodule_.stream().forEach(module -> module.accept(this, arg));
-        return null;
+    ModuleVisitor(VisitorState state) {
+        this.state = state;
     }
 
     @Override
@@ -56,6 +46,7 @@ final class ClassVisitor extends AbstractVisitor<Void, ClassWriter> {
     public Void visit(InterfDecl inf, ClassWriter writer) {
         String name = inf.uident_;
         try (ClassWriter declWriter = state.getFileWriter(name, ElementKind.INTERFACE)) {
+            declWriter.setInterfaces(Collections.emptyList(), state);
             inf.listmethsignat_.stream().forEachOrdered(method -> method.accept(this, declWriter));
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -111,10 +102,10 @@ final class ClassVisitor extends AbstractVisitor<Void, ClassWriter> {
         return null;
     }
 
-
     @Override
     public Void visit(ClassParamDecl klass, ClassWriter writer) {
-
+        visit(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
+            klass.listclassbody_2, Collections.emptyList());
         return null;
     }
 
@@ -127,19 +118,20 @@ final class ClassVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(ClassParamImplements klass, ClassWriter writer) {
-
+        visit(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
+            klass.listclassbody_2, klass.listqtype_);
         return null;
     }
 
     @Override
     public Void visit(FieldAssignClassBody body, ClassWriter writer) {
-
+        
         return null;
     }
 
     @Override
     public Void visit(FieldClassBody body, ClassWriter writer) {
-
+        writer.addField(body, state);
         return null;
     }
 

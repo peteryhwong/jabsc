@@ -1,8 +1,7 @@
 package jabsc.classgen;
 
-import javassist.bytecode.FieldInfo;
-
 import bnfc.abs.Absyn.Bloc;
+import bnfc.abs.Absyn.FieldClassBody;
 import bnfc.abs.Absyn.MethClassBody;
 import bnfc.abs.Absyn.MethSig;
 import bnfc.abs.Absyn.Par;
@@ -17,9 +16,8 @@ import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.ClassFile;
 import javassist.bytecode.ConstPool;
-import javassist.bytecode.DuplicateMemberException;
+import javassist.bytecode.FieldInfo;
 import javassist.bytecode.MethodInfo;
-
 
 import java.io.Closeable;
 import java.io.DataOutputStream;
@@ -35,7 +33,7 @@ import java.util.stream.Collectors;
 final class ClassWriter implements Closeable {
 
     private static final String ACTOR = "abs/api/Actor";
-    
+
     private enum MethodType {
         ABSTRACT, CONCRETE, CONSTRUCTOR
     }
@@ -55,13 +53,21 @@ final class ClassWriter implements Closeable {
 
         @Override
         public Void visit(TSimple p, StringBuilder arg) {
-            arg.append(translateType(state.processQType(p.qtype_).replace('.', '/')));
+            String type = translateType(state.processQType(p.qtype_).replace('.', '/'));
+            if (!type.equals("V")) {
+                arg.append('L');
+            }
+            arg.append(type);
             return null;
         }
 
         @Override
         public Void visit(TGen p, StringBuilder arg) {
             throw new UnsupportedOperationException();
+        }
+
+        private static String translateType(String type) {
+            return type.equals("void") ? "V" : type;
         }
 
     }
@@ -118,7 +124,7 @@ final class ClassWriter implements Closeable {
     void setInterfaces(List<QType> interfaces, VisitorState state) {
         String[] nameArray;
         if (interfaces.isEmpty()) {
-            nameArray = new String[] { ACTOR };
+            nameArray = new String[] {ACTOR};
         } else {
             nameArray = new String[interfaces.size() + 1];
             nameArray =
@@ -129,85 +135,127 @@ final class ClassWriter implements Closeable {
         classFile.setInterfaces(nameArray);
     }
 
-    void init(List<Param> params, List<Stm> statements, VisitorState state) {
-        
-        Bytecode code = new Bytecode(constPool);
-        code.addAload(0);
-        code.addInvokespecial("java/lang/Object", MethodInfo.nameInit, "()V");
-        if (params.isEmpty() && statements.isEmpty()) {
-            /*
-             * Default constructor
-             */
-            code.addReturn(null);
-            code.setMaxLocals(1);
-        } else {
-            TypeVisitor typeVisitor = new TypeVisitor(state);
-            StringBuilder builder = new StringBuilder();
-            params.stream().forEachOrdered(param -> {
-                param.accept((Par par, Void v) -> { 
-                    builder.setLength(0);
-                    par.type_.accept(typeVisitor, builder);
-                    classFile.addField2(new FieldInfo(constPool, par.lident_, builder.toString()));
-                    code.addPutfield("", "", "");
-                    return null;
-                }, (Void) null);
-            });
-            code.addReturn(null);
-            code.setMaxLocals(1);
-        }
- 
-        MethodInfo minfo = createMethodInfo(MethodInfo.nameInit, "()V", MethodType.CONSTRUCTOR);
-        minfo.setCodeAttribute(code.toCodeAttribute());
-        classFile.addMethod2(minfo);
+    /**
+     * Add a field to this class.
+     * 
+     * @param body
+     * @param state
+     */
+    void addField(FieldClassBody body, VisitorState state) {
+        StringBuilder builder = new StringBuilder('L');
+        body.type_.accept(new TypeVisitor(state), builder);
+        addField(body.lident_, builder.toString());
     }
 
-    static String translateType(String absType) {
-        if (absType.equals("Unit")) {
-            return "java/lang/Void";
-        } else if (absType.equals("Int")) {
-            return "java/lang/Integer";
-        } else if (absType.equals("Bool")) {
-            return "java/lang/Boolean";
-        } else if (absType.equals("String")) {
-            return "java/lang/String";
-        } else {
-            return absType;
+    private void addField(String name, String type) {
+        FieldInfo info = new FieldInfo(constPool, name, type);
+        info.setAccessFlags(AccessFlag.PRIVATE);
+        classFile.addField2(info);
+    }
+
+    private Bytecode setClassParam(List<Param> params, Bytecode code, VisitorState state) {
+        if (params.isEmpty()) {
+            return code;
         }
+
+        TypeVisitor typeVisitor = new TypeVisitor(state);
+        StringBuilder builder = new StringBuilder('L');
+        params.stream().forEachOrdered(param -> {
+            param.accept((Par par, Void v) -> {
+                builder.setLength(1);
+                par.type_.accept(typeVisitor, builder);
+                String type = builder.toString();
+                addField(par.lident_, type);
+                code.addAload(0);
+                code.addAload(constPool.getSize());
+                code.addPutfield(classFile.getName(), par.lident_, type);
+                return null;
+            }, (Void) null);
+        });
+        return code;
+    }
+
+    /**
+     * Creates a constructor for this class.
+     * 
+     * @param body
+     * @param state
+     */
+    void init(List<Param> params, List<Stm> statements, VisitorState state) {
+        final Bytecode code = new Bytecode(constPool);
+        code.addAload(0);
+        code.addInvokespecial("java/lang/Object", MethodInfo.nameInit, "()V");
+
+        if (!params.isEmpty() || !statements.isEmpty()) {
+            /*
+             * For every parameter, add and set field
+             */
+            setClassParam(params, code, state);
+            if (!statements.isEmpty()) {
+                StatementVisitor statementVisitor = new StatementVisitor(state);
+                statements.stream().forEachOrdered(stmt -> stmt.accept(statementVisitor, code));
+            }
+        }
+
+        /*
+         * Constructor does not return any value
+         */
+        code.addReturn(null);
+
+        MethodInfo minfo =
+            createMethodInfo(MethodInfo.nameInit, null, params, state, MethodType.CONSTRUCTOR);
+        minfo.setCodeAttribute(code.toCodeAttribute());
+        classFile.addMethod2(minfo);
     }
 
     private MethodInfo createMethodInfo(String methodName, Type returnType, List<Param> params,
         VisitorState state, MethodType methodType) {
 
         TypeVisitor typeVisitor = new TypeVisitor(state);
-        StringBuilder descriptor = new StringBuilder();
+        StringBuilder descriptor = new StringBuilder().append('(');
 
-        params.stream().forEachOrdered(
-            param -> param.accept(
-                (Par par, StringBuilder sb) -> par.type_.accept(typeVisitor, descriptor),
-                descriptor));
+        if (!params.isEmpty()) {
+            params.stream().forEachOrdered(param -> param.accept((Par par, StringBuilder sb) -> {
+                par.type_.accept(typeVisitor, sb);
+                sb.append(';');
+                return null;
+            }, descriptor));
+        }
 
-        descriptor.append("()");
+        descriptor.append(')');
 
-        returnType.accept(typeVisitor, descriptor);
+        if (returnType == null) {
+            descriptor.append('V');
+        } else {
+            StringBuilder retype = new StringBuilder();
+            returnType.accept(typeVisitor, retype);
+            if (retype.charAt(0) != 'V') {
+                retype.append(';');
+            }
+            descriptor.append(retype);
+        }
 
         return createMethodInfo(methodName, descriptor.toString(), methodType);
     }
 
+    /**
+     * Adds a method signature for this interface class.
+     * 
+     * @param body
+     * @param state
+     */
     void onMethod(MethSig method, VisitorState state) {
-        MethodInfo minf =
-            createMethodInfo(method.lident_, method.type_, method.listparam_, state,
-                MethodType.ABSTRACT);
-        try {
-            classFile.addMethod(minf);
-        } catch (DuplicateMemberException e) {
-            throw new IllegalStateException(e);
-        }
+        classFile.addMethod2(createMethodInfo(method.lident_, method.type_, method.listparam_,
+            state, MethodType.ABSTRACT));
     }
 
+    /**
+     * Adds a method for this class.
+     * 
+     * @param body
+     * @param state
+     */
     void onMethod(MethClassBody body, VisitorState state) {
-        MethodInfo methodInfo =
-            createMethodInfo(body.lident_, body.type_, body.listparam_, state, MethodType.CONCRETE);
-
         Bytecode code = new Bytecode(constPool);
         StatementVisitor statementVisitor = new StatementVisitor(state);
 
@@ -216,25 +264,18 @@ final class ClassWriter implements Closeable {
             return null;
         }, null);
 
-        methodInfo.setCodeAttribute(code.toCodeAttribute());
+        MethodInfo methodInfo =
+            createMethodInfo(body.lident_, body.type_, body.listparam_, state, MethodType.CONCRETE);
 
-        try {
-            classFile.addMethod(methodInfo);
-        } catch (DuplicateMemberException e) {
-            throw new IllegalStateException(e);
+        /*
+         * Returns void.
+         */
+        if (methodInfo.getDescriptor().endsWith("V")) {
+            code.addReturn(null);
         }
 
+        methodInfo.setCodeAttribute(code.toCodeAttribute());
+        classFile.addMethod2(methodInfo);
     }
-
-    public static void main(String[] args) throws IOException {
-
-//        Path outputDirectory = Paths.get("/Users/pwong/projects/tmp/gen");
-//        ClassFileWriterSupplier supplier = new ClassFileWriterSupplier("test", outputDirectory);
-//        ClassWriter writer = supplier.apply("FooImpl", ElementKind.CLASS);
-//        writer.init();
-//        writer.close();
-
-    }
-
 
 }
