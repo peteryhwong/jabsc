@@ -47,8 +47,8 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
         
     StatementVisitor(VisitorState state) {
         this.state = state;
-        this.effExpVisitor = new EffExpVisitor(state);
-        this.pureExpVisitor = new PureExpVisitor(state);
+        this.effExpVisitor = new EffExpVisitor(this.state);
+        this.pureExpVisitor = new PureExpVisitor(this.state);
     }
 
     @Override

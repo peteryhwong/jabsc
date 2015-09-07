@@ -1,10 +1,14 @@
 package jabsc.classgen;
 
+import javassist.bytecode.FieldInfo;
+
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.MethClassBody;
 import bnfc.abs.Absyn.MethSig;
 import bnfc.abs.Absyn.Par;
 import bnfc.abs.Absyn.Param;
+import bnfc.abs.Absyn.QType;
+import bnfc.abs.Absyn.Stm;
 import bnfc.abs.Absyn.TGen;
 import bnfc.abs.Absyn.TSimple;
 import bnfc.abs.Absyn.TUnderscore;
@@ -16,23 +20,50 @@ import javassist.bytecode.ConstPool;
 import javassist.bytecode.DuplicateMemberException;
 import javassist.bytecode.MethodInfo;
 
+
 import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import javax.lang.model.element.ElementKind;
+import java.util.stream.Collectors;
 
 final class ClassWriter implements Closeable {
 
+    private static final String ACTOR = "abs/api/Actor";
+    
     private enum MethodType {
         ABSTRACT, CONCRETE, CONSTRUCTOR
+    }
+
+    private static final class TypeVisitor implements Type.Visitor<Void, StringBuilder> {
+
+        private final VisitorState state;
+
+        private TypeVisitor(VisitorState state) {
+            this.state = state;
+        }
+
+        @Override
+        public Void visit(TUnderscore p, StringBuilder arg) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Void visit(TSimple p, StringBuilder arg) {
+            arg.append(translateType(state.processQType(p.qtype_).replace('.', '/')));
+            return null;
+        }
+
+        @Override
+        public Void visit(TGen p, StringBuilder arg) {
+            throw new UnsupportedOperationException();
+        }
+
     }
 
     private static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
@@ -84,21 +115,50 @@ final class ClassWriter implements Closeable {
         return minfo;
     }
 
-    void init() {
+    void setInterfaces(List<QType> interfaces, VisitorState state) {
+        String[] nameArray;
+        if (interfaces.isEmpty()) {
+            nameArray = new String[] { ACTOR };
+        } else {
+            nameArray = new String[interfaces.size() + 1];
+            nameArray =
+                interfaces.stream().map(type -> state.processQType(type).replace('.', '/'))
+                    .collect(Collectors.toList()).toArray(nameArray);
+            nameArray[nameArray.length - 1] = ACTOR;
+        }
+        classFile.setInterfaces(nameArray);
+    }
+
+    void init(List<Param> params, List<Stm> statements, VisitorState state) {
+        
         Bytecode code = new Bytecode(constPool);
         code.addAload(0);
         code.addInvokespecial("java/lang/Object", MethodInfo.nameInit, "()V");
-        code.addReturn(null);
-        code.setMaxLocals(1);
-
+        if (params.isEmpty() && statements.isEmpty()) {
+            /*
+             * Default constructor
+             */
+            code.addReturn(null);
+            code.setMaxLocals(1);
+        } else {
+            TypeVisitor typeVisitor = new TypeVisitor(state);
+            StringBuilder builder = new StringBuilder();
+            params.stream().forEachOrdered(param -> {
+                param.accept((Par par, Void v) -> { 
+                    builder.setLength(0);
+                    par.type_.accept(typeVisitor, builder);
+                    classFile.addField2(new FieldInfo(constPool, par.lident_, builder.toString()));
+                    code.addPutfield("", "", "");
+                    return null;
+                }, (Void) null);
+            });
+            code.addReturn(null);
+            code.setMaxLocals(1);
+        }
+ 
         MethodInfo minfo = createMethodInfo(MethodInfo.nameInit, "()V", MethodType.CONSTRUCTOR);
         minfo.setCodeAttribute(code.toCodeAttribute());
-
-        try {
-            classFile.addMethod(minfo);
-        } catch (DuplicateMemberException e) {
-            throw new IllegalStateException(e);
-        }
+        classFile.addMethod2(minfo);
     }
 
     static String translateType(String absType) {
@@ -113,32 +173,6 @@ final class ClassWriter implements Closeable {
         } else {
             return absType;
         }
-    }
-
-    private final class TypeVisitor implements Type.Visitor<Void, StringBuilder> {
-
-        private final VisitorState state;
-
-        private TypeVisitor(VisitorState state) {
-            this.state = state;
-        }
-
-        @Override
-        public Void visit(TUnderscore p, StringBuilder arg) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Void visit(TSimple p, StringBuilder arg) {
-            arg.append(translateType(state.processQType(p.qtype_).replace('.', '/')));
-            return null;
-        }
-
-        @Override
-        public Void visit(TGen p, StringBuilder arg) {
-            throw new UnsupportedOperationException();
-        }
-
     }
 
     private MethodInfo createMethodInfo(String methodName, Type returnType, List<Param> params,
@@ -169,21 +203,21 @@ final class ClassWriter implements Closeable {
             throw new IllegalStateException(e);
         }
     }
-    
+
     void onMethod(MethClassBody body, VisitorState state) {
         MethodInfo methodInfo =
             createMethodInfo(body.lident_, body.type_, body.listparam_, state, MethodType.CONCRETE);
 
         Bytecode code = new Bytecode(constPool);
         StatementVisitor statementVisitor = new StatementVisitor(state);
-        
+
         body.block_.accept((Bloc bloc, Void v) -> {
             bloc.liststm_.stream().forEachOrdered(stm -> stm.accept(statementVisitor, code));
             return null;
         }, null);
-        
+
         methodInfo.setCodeAttribute(code.toCodeAttribute());
-        
+
         try {
             classFile.addMethod(methodInfo);
         } catch (DuplicateMemberException e) {
@@ -194,11 +228,11 @@ final class ClassWriter implements Closeable {
 
     public static void main(String[] args) throws IOException {
 
-        Path outputDirectory = Paths.get("/Users/pwong/projects/tmp/gen");
-        ClassFileWriterSupplier supplier = new ClassFileWriterSupplier("test", outputDirectory);
-        ClassWriter writer = supplier.apply("FooImpl", ElementKind.CLASS);
-        writer.init();
-        writer.close();
+//        Path outputDirectory = Paths.get("/Users/pwong/projects/tmp/gen");
+//        ClassFileWriterSupplier supplier = new ClassFileWriterSupplier("test", outputDirectory);
+//        ClassWriter writer = supplier.apply("FooImpl", ElementKind.CLASS);
+//        writer.init();
+//        writer.close();
 
     }
 
