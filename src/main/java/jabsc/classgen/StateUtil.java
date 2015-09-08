@@ -30,19 +30,22 @@ import javax.lang.model.element.Modifier;
 
 final class StateUtil {
     
-    static final Map<String, String> ABS_TO_JDK;
+    static final Function<String, String> ABS_TO_JDK;
     static final Set<String> BUILT_IN_ABS;
     static {
         Map<String, String> map = new HashMap<>();
-        map.put("Unit", "void");
-        map.put("String", "java/lang/String");
-        map.put("Int", "java/lang/Long");
-        map.put("Rat", "java/lang/Double");
-        map.put("Bool", "java/lang/Boolean");
-        ABS_TO_JDK = Collections.unmodifiableMap(map);
-        BUILT_IN_ABS = ABS_TO_JDK.keySet();
+        map.put("Unit", "V");
+        map.put("String", "Ljava/lang/String");
+        map.put("Int", "Ljava/lang/Long");
+        map.put("Rat", "Ljava/lang/Double");
+        map.put("Bool", "Ljava/lang/Boolean");
+        ABS_TO_JDK = s -> { 
+            String v = map.get(s);
+            return v == null ? "L" + s : v;
+        };
+        BUILT_IN_ABS = map.keySet();
     }
-
+    
     static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
     static final String VOID_WRAPPER_CLASS_NAME = "Void";
     static final String VOID_PRIMITIVE_NAME = "void";

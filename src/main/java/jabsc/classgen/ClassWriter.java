@@ -53,21 +53,13 @@ final class ClassWriter implements Closeable {
 
         @Override
         public Void visit(TSimple p, StringBuilder arg) {
-            String type = translateType(state.processQType(p.qtype_).replace('.', '/'));
-            if (!type.equals("V")) {
-                arg.append('L');
-            }
-            arg.append(type);
+            arg.append(StateUtil.ABS_TO_JDK.apply(state.processQType(p.qtype_).replace('.', '/')));
             return null;
         }
 
         @Override
         public Void visit(TGen p, StringBuilder arg) {
             throw new UnsupportedOperationException();
-        }
-
-        private static String translateType(String type) {
-            return type.equals("void") ? "V" : type;
         }
 
     }
@@ -124,10 +116,9 @@ final class ClassWriter implements Closeable {
         if (interfaces.isEmpty()) {
             nameArray = new String[] {ACTOR};
         } else {
-            nameArray = new String[interfaces.size() + 1];
             nameArray =
-                interfaces.stream().map(type -> state.processQType(type).replace('.', '/'))
-                    .collect(Collectors.toList()).toArray(nameArray);
+                interfaces.stream().map(state::processQType).map(s -> s.replace('.', '/'))
+                    .collect(Collectors.toSet()).toArray(new String[interfaces.size() + 1]);
             nameArray[nameArray.length - 1] = ACTOR;
         }
         classFile.setInterfaces(nameArray);
@@ -213,7 +204,7 @@ final class ClassWriter implements Closeable {
         StringBuilder descriptor = new StringBuilder().append('(');
 
         if (!params.isEmpty()) {
-            params.stream().forEachOrdered(param -> param.accept((Par par, StringBuilder sb) -> {
+            params.forEach(param -> param.accept((Par par, StringBuilder sb) -> {
                 par.type_.accept(typeVisitor, sb);
                 sb.append(';');
                 return null;
@@ -261,7 +252,7 @@ final class ClassWriter implements Closeable {
         StatementVisitor statementVisitor = new StatementVisitor(state);
 
         body.block_.accept((Bloc bloc, Void v) -> {
-            bloc.liststm_.stream().forEachOrdered(stm -> stm.accept(statementVisitor, code));
+            bloc.liststm_.forEach(stm -> stm.accept(statementVisitor, code));
             return null;
         }, null);
 

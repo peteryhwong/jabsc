@@ -5,11 +5,7 @@ import bnfc.abs.Absyn.AnyIdent.Visitor;
 import bnfc.abs.Absyn.AnyTyIden;
 import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.Prog;
-import bnfc.abs.Absyn.QTyp;
 import bnfc.abs.Absyn.QType;
-import bnfc.abs.Absyn.QTypeSegmen;
-import bnfc.abs.Absyn.TTyp;
-import bnfc.abs.Absyn.TTypeSegmen;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,15 +27,13 @@ final class VisitorState {
                 /*
                  * import fully.qualified.Name1, fully.qualified.Name2, ...;
                  */
-                return p.ttype_.accept(
-                    (TTyp ts, Set<String> as) -> {
-                        ts.listttypesegment_.stream().forEach(
-                            segt -> segt.accept((TTypeSegmen seg, Set<String> names) -> {
-                                names.add(seg.uident_);
-                                return null;
-                            }, arg));
+                return p.ttype_.accept((ts, as) -> {
+                    ts.listttypesegment_.stream().forEach(segt -> segt.accept((seg, names) -> {
+                        names.add(seg.uident_);
                         return null;
-                    }, arg);
+                    }, arg));
+                    return null;
+                }, arg);
             }
 
             @Override
@@ -47,7 +41,7 @@ final class VisitorState {
                 /*
                  * import unqualifiedName1, unqualifiedName2,.. from fully.qualified.Name;
                  */
-                String moduleName = p.qtype_.accept(qtypeVisitor, null);
+                String moduleName = p.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
                 p.listanyident_.stream().forEach(anyIdent -> {
                     anyIdent.accept(new Visitor<Void, Set<String>>() {
@@ -76,9 +70,9 @@ final class VisitorState {
                 /*
                  * import * from fully.qualified.Name;
                  */
-                String moduleName = p.qtype_.accept(qtypeVisitor, null);
+                String moduleName = p.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
-                VisitorState.this.moduleInfos.get(moduleName).exports.forEach(string -> {
+                VisitorState.this.moduleInfos.get(moduls.get(moduleName)).exports.forEach(string -> {
                     arg.add(name.append(string).toString());
                     name.setLength(name.length() - string.length());
                 });
@@ -91,19 +85,20 @@ final class VisitorState {
 
     private static final class ModuleInfo {
         private String name;
-        private Set<String> exports;
-        private Set<String> imports;
-        private Map<String, String> qualifiedDeclarations;
-        private Map<String, String> nameToQualifiedName;
+        private final Set<String> exports = new HashSet<>();
+        private final Set<String> imports = new HashSet<>();
+        private final Map<String, String> qualifiedDeclarations = new HashMap<>();
+        private final Map<String, String> nameToQualifiedName = new HashMap<>();
     }
 
+    private final Map<String, Modul> moduls = new HashMap<>();
     private final Map<Modul, ModuleInfo> moduleInfos = new HashMap<>();
 
-    private final QType.Visitor<String, Boolean> qtypeVisitor = (QTyp p, Boolean arg) -> {
+    private final QType.Visitor<String, Boolean> qtypeVisitor = (p, arg) -> {
 
         StringBuilder sb = new StringBuilder();
 
-        p.listqtypesegment_.forEach(s -> s.accept((QTypeSegmen seg, Void v) -> {
+        p.listqtypesegment_.forEach(s -> s.accept((seg, v) -> {
             sb.append(seg.uident_).append('.');
             return null;
         }, null));
@@ -165,34 +160,30 @@ final class VisitorState {
     VisitorState buildProgramDeclarationTypes(Prog program) {
 
         program.listmodule_.forEach(mod -> mod.accept(
-            (Modul m, Void v) -> {
+            (m, v) -> {
                 ModuleInfo info = new ModuleInfo();
+                moduleInfos.put(m, info);
                 info.name = m.qtype_.accept(qtypeVisitor, Boolean.FALSE);
-                info.exports =
-                    m.listdecl_.stream().map(d -> StateUtil.getTopLevelDeclIdentifier(d))
-                        .collect(Collectors.toSet());
+                moduls.put(info.name, m);
+                
+                m.listdecl_.stream().map(StateUtil::getTopLevelDeclIdentifier)
+                    .forEach(info.exports::add);
 
                 /*
                  * assume export *;
                  */
-                info.qualifiedDeclarations = new HashMap<>();
-
                 StringBuilder prefix = new StringBuilder(info.name).append('.');
                 info.exports.forEach(s -> {
                     info.qualifiedDeclarations.put(s, prefix.append(s).toString());
                     prefix.setLength(prefix.length() - s.length());
                 });
 
-                moduleInfos.put(m, info);
                 return null;
             }, null));
 
         moduleInfos.keySet().forEach(m -> {
             ModuleInfo info = moduleInfos.get(m);
-            info.imports = new HashSet<>();
             m.listimport_.forEach(im -> im.accept(importVisitor, info.imports));
-
-            info.nameToQualifiedName = new HashMap<>();
             info.imports.forEach(d -> {
                 Matcher mt = StateUtil.UNQUALIFIED_CLASSNAME.matcher(d);
                 mt.matches();
@@ -202,12 +193,12 @@ final class VisitorState {
 
         Set<String> interfaces =
             moduleInfos.keySet().stream().map(m -> m.listdecl_).flatMap(d -> d.stream())
-                .filter(d -> StateUtil.isAbsInterfaceDecl(d))
-                .map(d -> StateUtil.getTopLevelDeclIdentifier(d)).collect(Collectors.toSet());
+                .filter(StateUtil::isAbsInterfaceDecl).map(StateUtil::getTopLevelDeclIdentifier)
+                .collect(Collectors.toSet());
 
         moduleInfos.keySet().stream().map(m -> m.listdecl_).flatMap(d -> d.stream())
-            .filter(d -> StateUtil.isAbsClassDecl(d))
-            .map(d -> StateUtil.getTopLevelDeclIdentifier(d)).forEach(c -> {
+            .filter(StateUtil::isAbsClassDecl).map(StateUtil::getTopLevelDeclIdentifier)
+            .forEach(c -> {
                 if (interfaces.contains(c)) {
                     classNames.put(c, c + "Impl");
                 } else {
