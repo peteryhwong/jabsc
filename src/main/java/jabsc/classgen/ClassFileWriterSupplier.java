@@ -21,13 +21,13 @@ final class ClassFileWriterSupplier implements BiFunction<String, ElementKind, C
         this.outDirPath = outPath;
         this.packageName = new StringBuilder(packageName).append('.');
     }
-    
+
     private String getQualifiedName(String unqualifiedName) {
         String qualifiedName = this.packageName.append(unqualifiedName).toString();
         this.packageName.setLength(this.packageName.length() - unqualifiedName.length());
         return qualifiedName;
     }
-    
+
     @Override
     public ClassWriter apply(String unqualifiedName, ElementKind kind) {
         String qualifiedName = getQualifiedName(unqualifiedName);
@@ -36,16 +36,17 @@ final class ClassFileWriterSupplier implements BiFunction<String, ElementKind, C
             case CLASS:
             case ENUM:
                 classFile = new ClassFile(false, qualifiedName, null);
-                classFile.setAccessFlags(classFile.getAccessFlags() | AccessFlag.PUBLIC | AccessFlag.FINAL);
+                classFile.setAccessFlags(classFile.getAccessFlags() | AccessFlag.PUBLIC
+                    | AccessFlag.FINAL);
                 break;
             case INTERFACE:
                 classFile = new ClassFile(true, qualifiedName, null);
                 classFile.setAccessFlags(classFile.getAccessFlags() | AccessFlag.PUBLIC);
                 break;
             default:
-                throw new IllegalArgumentException("Unsupported Java element kind: " + kind);            
+                throw new IllegalArgumentException("Unsupported Java element kind: " + kind);
         }
-        
+
         classFile.setMajorVersion(ClassFile.JAVA_8);
         return new ClassWriter(outDirPath, classFile);
     }

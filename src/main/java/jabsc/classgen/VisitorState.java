@@ -158,7 +158,7 @@ final class VisitorState {
     }
 
     VisitorState buildProgramDeclarationTypes(Prog program) {
-
+        
         program.listmodule_.forEach(mod -> mod.accept(
             (m, v) -> {
                 ModuleInfo info = new ModuleInfo();

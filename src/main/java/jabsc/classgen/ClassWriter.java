@@ -36,7 +36,7 @@ final class ClassWriter implements Closeable {
     private static final String ACTOR = "abs/api/Actor";
 
     private enum MethodType {
-        ABSTRACT, CONCRETE, CONSTRUCTOR
+        ABSTRACT, CONCRETE, CONSTRUCTOR, STATIC
     }
 
     private static final class TypeVisitor implements Type.Visitor<Void, StringBuilder> {
@@ -105,6 +105,9 @@ final class ClassWriter implements Closeable {
                 break;
             case CONSTRUCTOR:
                 minfo.setAccessFlags(AccessFlag.PUBLIC);
+                break;
+            case STATIC:
+                minfo.setAccessFlags(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.FINAL);
                 break;
             default:
                 throw new IllegalArgumentException();
@@ -247,6 +250,23 @@ final class ClassWriter implements Closeable {
     void addMethod(MethSig method, VisitorState state) {
         classFile.addMethod2(createMethodInfo(method.lident_, method.type_, method.listparam_,
             state, MethodType.ABSTRACT));
+    }
+    
+    /**
+     * Add a static main method to this class.
+     * 
+     * @param statements
+     * @param state
+     */
+    void addMainMethod(List<Stm> statements, VisitorState state) {
+        MethodInfo info = createMethodInfo("main", "([Ljava/lang/String;)V", MethodType.STATIC);
+        Bytecode code = new Bytecode(constPool);
+        StatementVisitor statementVisitor = new StatementVisitor(state);
+        statements.forEach(stm -> stm.accept(statementVisitor, code));
+        code.addReturn(null);
+        code.setMaxLocals(1);
+        info.setCodeAttribute(code.toCodeAttribute());
+        classFile.addMethod2(info);
     }
 
     /**

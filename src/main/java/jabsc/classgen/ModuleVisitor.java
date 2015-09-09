@@ -1,7 +1,7 @@
 package jabsc.classgen;
 
 import bnfc.abs.AbstractVisitor;
-import bnfc.abs.Absyn.Bloc;
+import bnfc.abs.Absyn.ClassBody;
 import bnfc.abs.Absyn.ClassDecl;
 import bnfc.abs.Absyn.ClassImplements;
 import bnfc.abs.Absyn.ClassParamDecl;
@@ -10,7 +10,6 @@ import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
 import bnfc.abs.Absyn.InterfDecl;
 import bnfc.abs.Absyn.JustBlock;
-import bnfc.abs.Absyn.ListClassBody;
 import bnfc.abs.Absyn.MaybeBlock;
 import bnfc.abs.Absyn.MethClassBody;
 import bnfc.abs.Absyn.MethSig;
@@ -18,6 +17,7 @@ import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.NoBlock;
 import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.QType;
+import bnfc.abs.Absyn.Stm;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -37,8 +37,20 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
     public Void visit(Modul m, ClassWriter writer) {
         state.setCurrentModule(m);
         m.listdecl_.stream().forEach(decl -> decl.accept(this, writer));
-        // visitFunctions(m, writer);
-        // visitMain(m, writer);
+        m.maybeblock_.accept(new MaybeBlock.Visitor<Void, ClassWriter>() {
+
+            @Override
+            public Void visit(JustBlock p, ClassWriter arg) {
+                p.block_.accept((b, v) -> createMain(b.liststm_), null);
+                return null;
+            }
+
+            @Override
+            public Void visit(NoBlock p, ClassWriter arg) {
+                return null;
+            }
+
+        }, writer);
         return null;
     }
 
@@ -54,8 +66,18 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
         return null;
     }
 
-    private void visit(String name, List<Param> params, ListClassBody body1, MaybeBlock block,
-        ListClassBody body2, List<QType> interfaces) {
+    private Void createMain(List<Stm> liststm) {
+        try (ClassWriter declWriter =
+            state.getFileWriter(StateUtil.MAIN_CLASS_NAME, ElementKind.CLASS)) {
+            declWriter.addMainMethod(liststm, state);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return null;
+    }
+
+    private void createClass(String name, List<Param> params, List<ClassBody> body1,
+        MaybeBlock block, List<ClassBody> body2, List<QType> interfaces) {
         String refinedClassName = state.getRefinedClassName(name);
         try (ClassWriter declWriter = state.getFileWriter(refinedClassName, ElementKind.CLASS)) {
             declWriter.setInterfaces(interfaces, state);
@@ -64,7 +86,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
                 @Override
                 public Void visit(JustBlock p, ClassWriter arg) {
-                    p.block_.accept((Bloc b, ClassWriter w) -> {
+                    p.block_.accept((b, w) -> {
                         w.init(params, b.liststm_, state);
                         return null;
                     }, arg);
@@ -86,8 +108,8 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(ClassDecl klass, ClassWriter writer) {
-        visit(klass.uident_, Collections.emptyList(), klass.listclassbody_1, klass.maybeblock_,
-            klass.listclassbody_2, Collections.emptyList());
+        createClass(klass.uident_, Collections.emptyList(), klass.listclassbody_1,
+            klass.maybeblock_, klass.listclassbody_2, Collections.emptyList());
         return null;
     }
 
@@ -104,21 +126,21 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(ClassParamDecl klass, ClassWriter writer) {
-        visit(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
+        createClass(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
             klass.listclassbody_2, Collections.emptyList());
         return null;
     }
 
     @Override
     public Void visit(ClassImplements klass, ClassWriter writer) {
-        visit(klass.uident_, Collections.emptyList(), klass.listclassbody_1, klass.maybeblock_,
-            klass.listclassbody_2, klass.listqtype_);
+        createClass(klass.uident_, Collections.emptyList(), klass.listclassbody_1,
+            klass.maybeblock_, klass.listclassbody_2, klass.listqtype_);
         return null;
     }
 
     @Override
     public Void visit(ClassParamImplements klass, ClassWriter writer) {
-        visit(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
+        createClass(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
             klass.listclassbody_2, klass.listqtype_);
         return null;
     }
