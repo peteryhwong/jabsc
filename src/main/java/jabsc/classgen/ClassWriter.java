@@ -1,6 +1,7 @@
 package jabsc.classgen;
 
 import bnfc.abs.Absyn.Bloc;
+import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
 import bnfc.abs.Absyn.MethClassBody;
 import bnfc.abs.Absyn.MethSig;
@@ -124,6 +125,12 @@ final class ClassWriter implements Closeable {
         classFile.setInterfaces(nameArray);
     }
 
+    void addField(FieldAssignClassBody body, VisitorState state) {
+        StringBuilder builder = new StringBuilder();
+        body.type_.accept(new TypeVisitor(state), builder);
+        addField(body.lident_, builder.toString());
+    }
+    
     /**
      * Add a field to this class.
      * 
@@ -131,15 +138,16 @@ final class ClassWriter implements Closeable {
      * @param state
      */
     void addField(FieldClassBody body, VisitorState state) {
-        StringBuilder builder = new StringBuilder('L');
+        StringBuilder builder = new StringBuilder();
         body.type_.accept(new TypeVisitor(state), builder);
         addField(body.lident_, builder.toString());
     }
 
-    private void addField(String name, String type) {
+    private FieldInfo addField(String name, String type) {
         FieldInfo info = new FieldInfo(constPool, name, type);
         info.setAccessFlags(AccessFlag.PRIVATE);
         classFile.addField2(info);
+        return info;
     }
 
     private Bytecode setClassParam(List<Param> params, Bytecode code, VisitorState state) {
@@ -236,7 +244,7 @@ final class ClassWriter implements Closeable {
      * @param body
      * @param state
      */
-    void onMethod(MethSig method, VisitorState state) {
+    void addMethod(MethSig method, VisitorState state) {
         classFile.addMethod2(createMethodInfo(method.lident_, method.type_, method.listparam_,
             state, MethodType.ABSTRACT));
     }
@@ -247,7 +255,7 @@ final class ClassWriter implements Closeable {
      * @param body
      * @param state
      */
-    void onMethod(MethClassBody body, VisitorState state) {
+    void addMethod(MethClassBody body, VisitorState state) {
         Bytecode code = new Bytecode(constPool);
         StatementVisitor statementVisitor = new StatementVisitor(state);
 
@@ -269,5 +277,6 @@ final class ClassWriter implements Closeable {
         methodInfo.setCodeAttribute(code.toCodeAttribute());
         classFile.addMethod2(methodInfo);
     }
+
 
 }

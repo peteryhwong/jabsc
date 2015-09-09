@@ -92,13 +92,13 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
     }
 
     public Void visit(MethSig sig, ClassWriter writer) {
-        writer.onMethod(sig, state);
+        writer.addMethod(sig, state);
         return null;
     }
 
     @Override
     public Void visit(MethClassBody body, ClassWriter writer) {
-        writer.onMethod(body, state);
+        writer.addMethod(body, state);
         return null;
     }
 
@@ -125,7 +125,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(FieldAssignClassBody body, ClassWriter writer) {
-        
+        writer.addField(body, state);
         return null;
     }
 
