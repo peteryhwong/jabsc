@@ -1,5 +1,8 @@
 package jabsc.classgen;
 
+import bnfc.abs.Absyn.MethSignat;
+
+import bnfc.abs.Absyn.ExtendsDecl;
 import bnfc.abs.AbstractVisitor;
 import bnfc.abs.Absyn.ClassBody;
 import bnfc.abs.Absyn.ClassDecl;
@@ -56,14 +59,23 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(InterfDecl inf, ClassWriter writer) {
-        String name = inf.uident_;
+        createInterface(inf.uident_, inf.listmethsignat_, Collections.emptyList());
+        return null;
+    }
+    
+    @Override
+    public Void visit(ExtendsDecl inf, ClassWriter writer) {
+        createInterface(inf.uident_, inf.listmethsignat_, inf.listqtype_);
+        return null;
+    }
+    
+    private void createInterface(String name, List<MethSignat> methods, List<QType> supertypes) {
         try (ClassWriter declWriter = state.getFileWriter(name, ElementKind.INTERFACE)) {
-            declWriter.setInterfaces(Collections.emptyList(), state);
-            inf.listmethsignat_.stream().forEachOrdered(method -> method.accept(this, declWriter));
+            declWriter.setInterfaces(supertypes, state);
+            methods.forEach(method -> method.accept(this, declWriter));
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        return null;
     }
 
     private Void createMain(List<Stm> liststm) {
@@ -81,7 +93,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
         String refinedClassName = state.getRefinedClassName(name);
         try (ClassWriter declWriter = state.getFileWriter(refinedClassName, ElementKind.CLASS)) {
             declWriter.setInterfaces(interfaces, state);
-            body1.stream().forEachOrdered(cb -> cb.accept(this, declWriter));
+            body1.forEach(cb -> cb.accept(this, declWriter));
             block.accept(new MaybeBlock.Visitor<Void, ClassWriter>() {
 
                 @Override
