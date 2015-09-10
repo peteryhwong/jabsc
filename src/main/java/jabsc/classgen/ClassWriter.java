@@ -133,7 +133,7 @@ final class ClassWriter implements Closeable {
         body.type_.accept(new TypeVisitor(state), builder);
         addField(body.lident_, builder.toString());
     }
-    
+
     /**
      * Add a field to this class.
      * 
@@ -178,10 +178,14 @@ final class ClassWriter implements Closeable {
     /**
      * Creates a constructor for this class.
      * 
-     * @param body
+     * @param params
+     * @param statements
+     * @param fieldAssigns
      * @param state
      */
-    void init(List<Param> params, List<Stm> statements, VisitorState state) {
+    void init(List<Param> params, List<Stm> statements, List<FieldAssignClassBody> fieldAssigns,
+        VisitorState state) {
+        
         final Bytecode code = new Bytecode(constPool);
         code.addAload(0);
         code.addInvokespecial(OBJECT, MethodInfo.nameInit, "()V");
@@ -251,7 +255,7 @@ final class ClassWriter implements Closeable {
         classFile.addMethod2(createMethodInfo(method.lident_, method.type_, method.listparam_,
             state, MethodType.ABSTRACT));
     }
-    
+
     /**
      * Add a static main method to this class.
      * 
