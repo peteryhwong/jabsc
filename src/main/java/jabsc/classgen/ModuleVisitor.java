@@ -123,7 +123,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
                 @Override
                 public Void visit(JustBlock p, ClassWriter arg) {
                     p.block_.accept((b, w) -> {
-                        w.init(params, b.liststm_, state);
+                        w.init(params, b.liststm_, fieldAssigns, state);
                         return null;
                     }, arg);
                     return null;
@@ -131,7 +131,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
                 @Override
                 public Void visit(NoBlock p, ClassWriter arg) {
-                    declWriter.init(params, Collections.emptyList(), state);
+                    declWriter.init(params, Collections.emptyList(), fieldAssigns, state);
                     return null;
                 }
 
