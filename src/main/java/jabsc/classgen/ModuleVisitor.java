@@ -96,11 +96,13 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
             declWriter.setInterfaces(interfaces, state);
 
             List<FieldAssignClassBody> fieldAssigns = new ArrayList<>();
+            List<FieldClassBody> fields = new ArrayList<>();
             Stream.concat(body1.stream(), body2.stream()).forEachOrdered(c -> c.accept(
                 new ClassBody.Visitor<Void, Void>() {
 
                     @Override
                     public Void visit(FieldClassBody p, Void arg) {
+                        fields.add(p);
                         return null;
                     }
 
@@ -123,7 +125,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
                 @Override
                 public Void visit(JustBlock p, ClassWriter arg) {
                     p.block_.accept((b, w) -> {
-                        w.init(params, b.liststm_, fieldAssigns, state);
+                        w.init(params, b.liststm_, fields, fieldAssigns, state);
                         return null;
                     }, arg);
                     return null;
@@ -131,7 +133,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
                 @Override
                 public Void visit(NoBlock p, ClassWriter arg) {
-                    declWriter.init(params, Collections.emptyList(), fieldAssigns, state);
+                    arg.init(params, Collections.emptyList(), fields, fieldAssigns, state);
                     return null;
                 }
 
@@ -188,7 +190,6 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
     @Override
     public Void visit(FieldClassBody body, ClassWriter writer) {
-        writer.addField(body, state);
         return null;
     }
 

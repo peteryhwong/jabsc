@@ -128,19 +128,13 @@ final class ClassWriter implements Closeable {
         classFile.setInterfaces(nameArray);
     }
 
-    void addField(FieldAssignClassBody body, VisitorState state) {
-        StringBuilder builder = new StringBuilder();
-        body.type_.accept(new TypeVisitor(state), builder);
-        addField(body.lident_, builder.toString());
-    }
-
     /**
      * Add a field to this class.
      * 
      * @param body
      * @param state
      */
-    void addField(FieldClassBody body, VisitorState state) {
+    private void addField(FieldClassBody body, VisitorState state) {
         StringBuilder builder = new StringBuilder();
         body.type_.accept(new TypeVisitor(state), builder);
         addField(body.lident_, builder.toString());
@@ -153,7 +147,13 @@ final class ClassWriter implements Closeable {
         return info;
     }
 
-    private Bytecode setClassParam(List<Param> params, Bytecode code, VisitorState state) {
+    private void addFields(List<FieldAssignClassBody> bodies, VisitorState state) {
+        StringBuilder builder = new StringBuilder();
+        body.type_.accept(new TypeVisitor(state), builder);
+        addField(body.lident_, builder.toString());
+    }
+
+    private Bytecode addClassParams(List<Param> params, Bytecode code, VisitorState state) {
         if (params.isEmpty()) {
             return code;
         }
@@ -180,12 +180,18 @@ final class ClassWriter implements Closeable {
      * 
      * @param params
      * @param statements
+     * @param fields
      * @param fieldAssigns
      * @param state
      */
-    void init(List<Param> params, List<Stm> statements, List<FieldAssignClassBody> fieldAssigns,
-        VisitorState state) {
-        
+    void init(List<Param> params, List<Stm> statements, List<FieldClassBody> fields,
+        List<FieldAssignClassBody> fieldAssigns, VisitorState state) {
+
+        /*
+         * initialise fields 
+         */
+        fields.forEach(f -> addField(f, state));
+
         final Bytecode code = new Bytecode(constPool);
         code.addAload(0);
         code.addInvokespecial(OBJECT, MethodInfo.nameInit, "()V");
@@ -194,7 +200,7 @@ final class ClassWriter implements Closeable {
             /*
              * For every parameter, add and set field
              */
-            setClassParam(params, code, state);
+            addClassParams(params, code, state);
             if (!statements.isEmpty()) {
                 StatementVisitor statementVisitor = new StatementVisitor(state);
                 statements.stream().forEachOrdered(stmt -> stmt.accept(statementVisitor, code));
