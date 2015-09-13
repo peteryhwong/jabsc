@@ -1,5 +1,7 @@
 package jabsc.classgen;
 
+import javassist.bytecode.Opcode;
+
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
@@ -31,9 +33,6 @@ import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 final class ClassWriter implements Closeable {
-
-    private static final String OBJECT = "java/lang/Object";
-    private static final String ACTOR = "abs/api/Actor";
 
     private enum MethodType {
         ABSTRACT, CONCRETE, CONSTRUCTOR, STATIC
@@ -118,12 +117,12 @@ final class ClassWriter implements Closeable {
     void setInterfaces(List<QType> interfaces, VisitorState state) {
         String[] nameArray;
         if (interfaces.isEmpty()) {
-            nameArray = new String[] {ACTOR};
+            nameArray = new String[] {StateUtil.ACTOR};
         } else {
             nameArray =
                 interfaces.stream().map(state::processQType).map(s -> s.replace('.', '/'))
                     .collect(Collectors.toSet()).toArray(new String[interfaces.size() + 1]);
-            nameArray[nameArray.length - 1] = ACTOR;
+            nameArray[nameArray.length - 1] = StateUtil.ACTOR;
         }
         classFile.setInterfaces(nameArray);
     }
@@ -147,10 +146,22 @@ final class ClassWriter implements Closeable {
         return info;
     }
 
-    private void addFields(List<FieldAssignClassBody> bodies, VisitorState state) {
+    private Bytecode addFields(List<FieldAssignClassBody> bodies, Bytecode code, VisitorState state) {
+        if (bodies.isEmpty()) {
+            return code;
+        }
+
+        PureExpVisitor visitor = new PureExpVisitor(state);
+        TypeVisitor typeVisitor = new TypeVisitor(state);
         StringBuilder builder = new StringBuilder();
-        body.type_.accept(new TypeVisitor(state), builder);
-        addField(body.lident_, builder.toString());
+        bodies.forEach(b -> {
+            b.type_.accept(typeVisitor, builder);
+            addField(b.lident_, builder.toString());
+            builder.setLength(0);
+            b.pureexp_.accept(visitor, code);
+        });
+
+        return code;
     }
 
     private Bytecode addClassParams(List<Param> params, Bytecode code, VisitorState state) {
@@ -188,25 +199,28 @@ final class ClassWriter implements Closeable {
         List<FieldAssignClassBody> fieldAssigns, VisitorState state) {
 
         /*
-         * initialise fields 
+         * initialise fields
          */
         fields.forEach(f -> addField(f, state));
 
         final Bytecode code = new Bytecode(constPool);
         code.addAload(0);
-        code.addInvokespecial(OBJECT, MethodInfo.nameInit, "()V");
+        code.addInvokespecial(StateUtil.OBJECT, MethodInfo.nameInit, "()V");
 
-        if (!params.isEmpty() || !statements.isEmpty()) {
-            /*
-             * For every parameter, add and set field
-             */
-            addClassParams(params, code, state);
-            if (!statements.isEmpty()) {
-                StatementVisitor statementVisitor = new StatementVisitor(state);
-                statements.stream().forEachOrdered(stmt -> stmt.accept(statementVisitor, code));
-            }
+        /*
+         * For every parameter, add and set field
+         */
+        addClassParams(params, code, state);
+
+        /*
+         * For every field assign, add and set field
+         */
+        addFields(fieldAssigns, code, state);
+
+        if (!statements.isEmpty()) {
+            StatementVisitor statementVisitor = new StatementVisitor(state);
+            statements.stream().forEachOrdered(stmt -> stmt.accept(statementVisitor, code));
         }
-
         /*
          * Constructor does not return any value
          */
@@ -269,14 +283,25 @@ final class ClassWriter implements Closeable {
      * @param state
      */
     void addMainMethod(List<Stm> statements, VisitorState state) {
-        MethodInfo info = createMethodInfo("main", "([Ljava/lang/String;)V", MethodType.STATIC);
+        MethodInfo instanceMethod = createMethodInfo("main", "()V", MethodType.CONCRETE);
         Bytecode code = new Bytecode(constPool);
         StatementVisitor statementVisitor = new StatementVisitor(state);
         statements.forEach(stm -> stm.accept(statementVisitor, code));
         code.addReturn(null);
-        code.setMaxLocals(1);
-        info.setCodeAttribute(code.toCodeAttribute());
-        classFile.addMethod2(info);
+        instanceMethod.setCodeAttribute(code.toCodeAttribute());
+        classFile.addMethod2(instanceMethod);
+
+        MethodInfo staticMethod =
+            createMethodInfo("main", "([Ljava/lang/String;)V", MethodType.STATIC);
+        Bytecode staticCode = new Bytecode(constPool);
+        staticCode.addNew(classFile.getName());
+        staticCode.addOpcode(Opcode.DUP);
+        staticCode.addInvokespecial(classFile.getName(), MethodInfo.nameInit, "()V");
+        staticCode.addInvokevirtual(classFile.getName(), "main", "()V");
+        staticCode.addReturn(null);
+        staticCode.setMaxLocals(1);
+        staticMethod.setCodeAttribute(staticCode.toCodeAttribute());
+        classFile.addMethod2(staticMethod);
     }
 
     /**

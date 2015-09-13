@@ -45,7 +45,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
             @Override
             public Void visit(JustBlock p, ClassWriter arg) {
-                p.block_.accept((b, v) -> createMain(b.liststm_), null);
+                p.block_.accept((b, v) -> createMain(m, b.liststm_), null);
                 return null;
             }
 
@@ -79,9 +79,11 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
         }
     }
 
-    private Void createMain(List<Stm> liststm) {
+    private Void createMain(Modul module, List<Stm> liststm) {
         try (ClassWriter declWriter =
-            state.getFileWriter(StateUtil.MAIN_CLASS_NAME, ElementKind.CLASS)) {
+            state.getFileWriter(state.getMainName(module), ElementKind.CLASS)) {
+            declWriter.init(Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), state);
             declWriter.addMainMethod(liststm, state);
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -97,8 +99,8 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
             List<FieldAssignClassBody> fieldAssigns = new ArrayList<>();
             List<FieldClassBody> fields = new ArrayList<>();
-            Stream.concat(body1.stream(), body2.stream()).forEachOrdered(c -> c.accept(
-                new ClassBody.Visitor<Void, Void>() {
+            Stream.concat(body1.stream(), body2.stream()).forEachOrdered(
+                c -> c.accept(new ClassBody.Visitor<Void, Void>() {
 
                     @Override
                     public Void visit(FieldClassBody p, Void arg) {

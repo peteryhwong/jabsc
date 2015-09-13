@@ -1,5 +1,7 @@
 package jabsc.classgen;
 
+import javassist.bytecode.Opcode;
+
 import bnfc.abs.Absyn.Case;
 import bnfc.abs.Absyn.EAdd;
 import bnfc.abs.Absyn.EAnd;
@@ -28,64 +30,92 @@ import bnfc.abs.Absyn.EThis;
 import bnfc.abs.Absyn.EVar;
 import bnfc.abs.Absyn.If;
 import bnfc.abs.Absyn.Let;
-
 import bnfc.abs.Absyn.PureExp.Visitor;
 import javassist.bytecode.Bytecode;
 
 final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     private final VisitorState state;
+    private final LiteralVisitor literalVisitor;
     
     PureExpVisitor(VisitorState state) {
         this.state = state;
+        this.literalVisitor = new LiteralVisitor();
+    }
+    
+    private static Bytecode addOperation(int opcode, Bytecode arg) {
+        int index = arg.getSize() - 1;
+        arg.addOpcode(opcode); //1
+        
+        int firstByte = index + 6 >> 8;
+        int secondByte = index + 6;
+        arg.add(firstByte, secondByte); //3
+        
+        arg.addIconst(1); //4
+        arg.addOpcode(Opcode.GOTO); //5
+        
+        firstByte = index + 9 >> 8;
+        secondByte = index + 9;
+        arg.add(firstByte, secondByte); //7
+        
+        arg.addIconst(0); //8
+        return arg;
     }
     
     @Override
     public Bytecode visit(EOr p, Bytecode arg) {
-        // TODO Auto-generated method stub
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
         return null;
     }
 
     @Override
     public Bytecode visit(EAnd p, Bytecode arg) {
-        // TODO Auto-generated method stub
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
         return null;
     }
 
     @Override
     public Bytecode visit(EEq p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPEQ, arg);
     }
 
     @Override
     public Bytecode visit(ENeq p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPNE, arg);
     }
 
     @Override
     public Bytecode visit(ELt p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPLT, arg);
     }
 
     @Override
     public Bytecode visit(ELe p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPLE, arg);
     }
 
     @Override
     public Bytecode visit(EGt p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPGT, arg);
     }
 
     @Override
     public Bytecode visit(EGe p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.pureexp_1.accept(this, arg);
+        p.pureexp_2.accept(this, arg);
+        return addOperation(Opcode.IF_ICMPGE, arg);
     }
 
     @Override
@@ -186,8 +216,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(ELit p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return p.literal_.accept(literalVisitor, arg);
     }
 
     @Override

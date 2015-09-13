@@ -3,6 +3,7 @@ package jabsc.classgen;
 import bnfc.abs.Absyn.AnyIden;
 import bnfc.abs.Absyn.AnyIdent.Visitor;
 import bnfc.abs.Absyn.AnyTyIden;
+import bnfc.abs.Absyn.Decl;
 import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.Prog;
 import bnfc.abs.Absyn.QType;
@@ -12,6 +13,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -72,10 +75,11 @@ final class VisitorState {
                  */
                 String moduleName = p.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
-                VisitorState.this.moduleInfos.get(moduls.get(moduleName)).exports.forEach(string -> {
-                    arg.add(name.append(string).toString());
-                    name.setLength(name.length() - string.length());
-                });
+                VisitorState.this.moduleInfos.get(moduls.get(moduleName)).exports
+                    .forEach(string -> {
+                        arg.add(name.append(string).toString());
+                        name.setLength(name.length() - string.length());
+                    });
                 return null;
             }
 
@@ -84,11 +88,42 @@ final class VisitorState {
     private final Map<String, String> classNames = new HashMap<>();
 
     private static final class ModuleInfo {
+        
+        /**
+         * Module name
+         */
         private String name;
+
+        /**
+         * Name of the class containing function definition
+         */
+        private String functionClassName;
+
+        /**
+         * Name of the class containing the block
+         */
+        private String mainClassName;
+
+        /**
+         * Name of declarations exported by this module.
+         */
         private final Set<String> exports = new HashSet<>();
+
+        /**
+         * Name of fully name imported by this module.
+         */
         private final Set<String> imports = new HashSet<>();
+
+        /**
+         * Declared names to their fully qualified names
+         */
         private final Map<String, String> qualifiedDeclarations = new HashMap<>();
+
+        /**
+         * Import names to their fully qualified names
+         */
         private final Map<String, String> nameToQualifiedName = new HashMap<>();
+        
     }
 
     private final Map<String, Modul> moduls = new HashMap<>();
@@ -117,8 +152,9 @@ final class VisitorState {
         }
 
         ModuleInfo info = VisitorState.this.currentModule;
-        if (info.qualifiedDeclarations.containsKey(type)) {
-            return info.qualifiedDeclarations.get(type);
+        String fullyQualified = info.qualifiedDeclarations.get(type);
+        if (fullyQualified != null) {
+            return fullyQualified;
         }
 
         return info.nameToQualifiedName.get(type);
@@ -136,12 +172,20 @@ final class VisitorState {
         return type.accept(this.qtypeVisitor, Boolean.TRUE);
     }
 
+    String getFunctionName(Modul module) {
+        return moduleInfos.get(module).functionClassName;
+    }
+    
+    String getMainName(Modul module) {
+        return moduleInfos.get(module).mainClassName;
+    }
+    
     Set<String> getModuleToExports(String moduleName) {
-        return moduleInfos.get(moduleName).exports;
+        return moduleInfos.get(moduls.get(moduleName)).exports;
     }
 
     Set<String> getModuleToImports(String moduleName) {
-        return moduleInfos.get(moduleName).imports;
+        return moduleInfos.get(moduls.get(moduleName)).imports;
     }
 
     String getRefinedClassName(String name) {
@@ -157,17 +201,59 @@ final class VisitorState {
         return this;
     }
 
+    private static void updateName(StringBuilder name, String against) {
+        for (int i = 0; i < against.length(); i++) {
+            if (i == name.length()) {
+                name.append('1');
+                break;
+            }
+
+            if (against.charAt(i) != name.charAt(i)) {
+                break;
+            }
+        }
+    }
+
     VisitorState buildProgramDeclarationTypes(Prog program) {
-        
+
+        StringBuilder function = new StringBuilder(StateUtil.FUNCTIONS_CLASS_NAME);
+        StringBuilder main = new StringBuilder(StateUtil.MAIN_CLASS_NAME);
+
         program.listmodule_.forEach(mod -> mod.accept(
             (m, v) -> {
+
                 ModuleInfo info = new ModuleInfo();
                 moduleInfos.put(m, info);
                 info.name = m.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 moduls.put(info.name, m);
-                
-                m.listdecl_.stream().map(StateUtil::getTopLevelDeclIdentifier)
-                    .forEach(info.exports::add);
+
+                Consumer<String> consumeDecl = info.exports::add;
+                consumeDecl =
+                    consumeDecl.andThen(s -> updateName(function, s)).andThen(
+                        s -> updateName(main, s));
+
+                Predicate<Decl> isFunction = StateUtil::isAbsFunctionDecl;
+                m.listdecl_.stream().filter(isFunction.negate())
+                    .map(StateUtil::getTopLevelDeclIdentifier).forEach(consumeDecl);
+
+                Set<String> functions =
+                    m.listdecl_.stream().filter(isFunction)
+                        .map(StateUtil::getTopLevelDeclIdentifier).collect(Collectors.toSet());
+
+                function.append('.');
+                int functionLength = function.length();
+                functions.stream().map(f -> {
+                    String qf = function.append(f).toString();
+                    function.setLength(functionLength);
+                    return qf;
+                }).forEach(info.exports::add);
+
+                function.setLength(functionLength - 1);
+                info.functionClassName = function.toString();
+                function.setLength(StateUtil.FUNCTIONS_CLASS_NAME.length());
+
+                info.mainClassName = main.toString();
+                main.setLength(StateUtil.MAIN_CLASS_NAME.length());
 
                 /*
                  * assume export *;
