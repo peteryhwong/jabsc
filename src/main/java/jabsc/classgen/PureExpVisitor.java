@@ -162,8 +162,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EFunCall p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arg;
     }
 
     @Override

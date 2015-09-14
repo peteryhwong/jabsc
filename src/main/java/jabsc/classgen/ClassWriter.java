@@ -183,6 +183,11 @@ final class ClassWriter implements Closeable {
                 return null;
             }, (Void) null);
         });
+        
+        /*
+         * Params are all references
+         */
+        code.incMaxLocals(params.size());
         return code;
     }
 
@@ -203,7 +208,12 @@ final class ClassWriter implements Closeable {
          */
         fields.forEach(f -> addField(f, state));
 
-        final Bytecode code = new Bytecode(constPool);
+        Bytecode code = new Bytecode(constPool);
+
+        /*
+         * first local variable holds the reference of this.
+         */
+        code.setMaxLocals(1);
         code.addAload(0);
         code.addInvokespecial(StateUtil.OBJECT, MethodInfo.nameInit, "()V");
 
@@ -239,7 +249,7 @@ final class ClassWriter implements Closeable {
         StringBuilder descriptor = new StringBuilder().append('(');
 
         if (!params.isEmpty()) {
-            params.forEach(param -> param.accept((Par par, StringBuilder sb) -> {
+            params.forEach(param -> param.accept((par, sb) -> {
                 par.type_.accept(typeVisitor, sb);
                 sb.append(';');
                 return null;
@@ -285,6 +295,11 @@ final class ClassWriter implements Closeable {
     void addMainMethod(List<Stm> statements, VisitorState state) {
         MethodInfo instanceMethod = createMethodInfo("main", "()V", MethodType.CONCRETE);
         Bytecode code = new Bytecode(constPool);
+        
+        /*
+         * first variable points to this
+         */
+        code.setMaxLocals(1);
         StatementVisitor statementVisitor = new StatementVisitor(state);
         statements.forEach(stm -> stm.accept(statementVisitor, code));
         code.addReturn(null);
@@ -299,6 +314,10 @@ final class ClassWriter implements Closeable {
         staticCode.addInvokespecial(classFile.getName(), MethodInfo.nameInit, "()V");
         staticCode.addInvokevirtual(classFile.getName(), "main", "()V");
         staticCode.addReturn(null);
+        
+        /*
+         * first variable points to the input string array
+         */
         staticCode.setMaxLocals(1);
         staticMethod.setCodeAttribute(staticCode.toCodeAttribute());
         classFile.addMethod2(staticMethod);
