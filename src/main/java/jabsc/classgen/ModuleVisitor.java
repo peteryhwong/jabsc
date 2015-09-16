@@ -85,6 +85,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
             declWriter.init(Collections.emptyList(), Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList(), state);
             declWriter.addMainMethod(liststm, state);
+            declWriter.overrideToString(state);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -141,6 +142,11 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
             }, declWriter);
             body2.forEach(cb -> cb.accept(this, declWriter));
+            
+            if (! declWriter.hasToString()) {
+                declWriter.overrideToString(state);
+            }
+            
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }

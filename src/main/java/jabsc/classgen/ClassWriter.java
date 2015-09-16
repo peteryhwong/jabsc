@@ -1,7 +1,6 @@
 package jabsc.classgen;
 
-import javassist.bytecode.Opcode;
-
+import javassist.bytecode.DuplicateMemberException;
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
@@ -11,9 +10,6 @@ import bnfc.abs.Absyn.Par;
 import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.Stm;
-import bnfc.abs.Absyn.TGen;
-import bnfc.abs.Absyn.TSimple;
-import bnfc.abs.Absyn.TUnderscore;
 import bnfc.abs.Absyn.Type;
 import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
@@ -21,6 +17,7 @@ import javassist.bytecode.ClassFile;
 import javassist.bytecode.ConstPool;
 import javassist.bytecode.FieldInfo;
 import javassist.bytecode.MethodInfo;
+import javassist.bytecode.Opcode;
 
 import java.io.Closeable;
 import java.io.DataOutputStream;
@@ -29,6 +26,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -38,35 +38,12 @@ final class ClassWriter implements Closeable {
         ABSTRACT, CONCRETE, CONSTRUCTOR, STATIC
     }
 
-    private static final class TypeVisitor implements Type.Visitor<Void, StringBuilder> {
-
-        private final VisitorState state;
-
-        private TypeVisitor(VisitorState state) {
-            this.state = state;
-        }
-
-        @Override
-        public Void visit(TUnderscore p, StringBuilder arg) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Void visit(TSimple p, StringBuilder arg) {
-            arg.append(StateUtil.ABS_TO_JDK.apply(state.processQType(p.qtype_).replace('.', '/')));
-            return null;
-        }
-
-        @Override
-        public Void visit(TGen p, StringBuilder arg) {
-            throw new UnsupportedOperationException();
-        }
-
-    }
-
     private final Path outputDirectory;
     private final ClassFile classFile;
     private final ConstPool constPool;
+
+    private final Function<VisitorState, BiFunction<Type, List<Param>, String>> descriptorFun =
+        s -> (t, ps) -> ClassWriter.createDescriptor(t, ps, s);
 
     ClassWriter(Path outputDirectory, ClassFile classFile) {
         this.outputDirectory = outputDirectory;
@@ -172,18 +149,18 @@ final class ClassWriter implements Closeable {
         TypeVisitor typeVisitor = new TypeVisitor(state);
         StringBuilder builder = new StringBuilder('L');
         params.stream().forEachOrdered(param -> {
-            param.accept((Par par, Void v) -> {
+            param.accept((par, bcode) -> {
                 builder.setLength(1);
                 par.type_.accept(typeVisitor, builder);
                 String type = builder.toString();
                 addField(par.lident_, type);
-                code.addAload(0);
-                code.addAload(constPool.getSize());
-                code.addPutfield(classFile.getName(), par.lident_, type);
-                return null;
-            }, (Void) null);
+                bcode.addAload(0);
+                bcode.addAload(constPool.getSize());
+                bcode.addPutfield(classFile.getName(), par.lident_, type);
+                return bcode;
+            }, code);
         });
-        
+
         /*
          * Params are all references
          */
@@ -218,6 +195,19 @@ final class ClassWriter implements Closeable {
         code.addInvokespecial(StateUtil.OBJECT, MethodInfo.nameInit, "()V");
 
         /*
+         * Register this object as an actor
+         */
+        code.addAload(0);
+        String desc = new StringBuilder("()L").append(StateUtil.CONTEXT).append(';').toString();
+        code.addInvokevirtual(classFile.getName(), "context", desc);
+        code.addAload(0);
+        code.addInvokevirtual(classFile.getName(), "toString", "()Ljava/lang/String;");
+        code.addAload(0);
+        code.addInvokeinterface(StateUtil.CONTEXT, "newActor",
+            "(Ljava/lang/String;Ljava/lang/Object;)Labs/api/Actor;", 3);
+        code.addOpcode(Opcode.POP);
+
+        /*
          * For every parameter, add and set field
          */
         addClassParams(params, code, state);
@@ -242,9 +232,7 @@ final class ClassWriter implements Closeable {
         classFile.addMethod2(minfo);
     }
 
-    private MethodInfo createMethodInfo(String methodName, Type returnType, List<Param> params,
-        VisitorState state, MethodType methodType) {
-
+    private static String createDescriptor(Type returnType, List<Param> params, VisitorState state) {
         TypeVisitor typeVisitor = new TypeVisitor(state);
         StringBuilder descriptor = new StringBuilder().append('(');
 
@@ -272,7 +260,13 @@ final class ClassWriter implements Closeable {
             descriptor.append(retype);
         }
 
-        return createMethodInfo(methodName, descriptor.toString(), methodType);
+        return descriptor.toString();
+    }
+
+    private MethodInfo createMethodInfo(String methodName, Type returnType, List<Param> params,
+        VisitorState state, MethodType methodType) {
+        String decriptor = ClassWriter.createDescriptor(returnType, params, state);
+        return createMethodInfo(methodName, decriptor, methodType);
     }
 
     /**
@@ -295,7 +289,7 @@ final class ClassWriter implements Closeable {
     void addMainMethod(List<Stm> statements, VisitorState state) {
         MethodInfo instanceMethod = createMethodInfo("main", "()V", MethodType.CONCRETE);
         Bytecode code = new Bytecode(constPool);
-        
+
         /*
          * first variable points to this
          */
@@ -310,17 +304,69 @@ final class ClassWriter implements Closeable {
             createMethodInfo("main", "([Ljava/lang/String;)V", MethodType.STATIC);
         Bytecode staticCode = new Bytecode(constPool);
         staticCode.addNew(classFile.getName());
+
+        /*
+         * duplicate the reference to the new object
+         */
         staticCode.addOpcode(Opcode.DUP);
+
+        /*
+         * Initialize object
+         */
         staticCode.addInvokespecial(classFile.getName(), MethodInfo.nameInit, "()V");
+
+        /*
+         * pop to local variable 1
+         */
+        staticCode.addAstore(1);
+
+        /*
+         * push from local variable 1
+         */
+        staticCode.addAload(1);
         staticCode.addInvokevirtual(classFile.getName(), "main", "()V");
         staticCode.addReturn(null);
-        
+
         /*
          * first variable points to the input string array
          */
         staticCode.setMaxLocals(1);
         staticMethod.setCodeAttribute(staticCode.toCodeAttribute());
         classFile.addMethod2(staticMethod);
+    }
+
+    /**
+     * Checks if this class has overridden {@link Object#toString()}.
+     * 
+     * @return true if this class has overridden {@link Object#toString()}.
+     */
+    boolean hasToString() {
+        return classFile.getMethod("toString") != null;
+    }
+
+    /**
+     * Overrides {@link Object#toString()}. Invoke this method if and only if this class does not
+     * already override {@link Object#toString()}.
+     * 
+     * @param state
+     * @throws IllegalStateException if {@link Object#toString()} has already been overridden.
+     */
+    void overrideToString(VisitorState state) {
+        Bytecode code = new Bytecode(constPool);
+        code.addAload(0);
+        code.addInvokestatic(StateUtil.FUNCTIONAL, "toString",
+            "(Ljava/lang/Object;)Ljava/lang/String;");
+        code.addOpcode(Opcode.ARETURN);
+
+        MethodInfo methodInfo =
+            createMethodInfo("toString", "()Ljava/lang/String;", MethodType.CONCRETE);
+        methodInfo.setCodeAttribute(code.toCodeAttribute());
+
+        try {
+            classFile.addMethod(methodInfo);
+        } catch (DuplicateMemberException e) {
+            throw new IllegalStateException("toString() has already been overriden", e);
+        }
     }
 
     /**

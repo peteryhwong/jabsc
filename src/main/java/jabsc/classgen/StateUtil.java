@@ -32,6 +32,7 @@ final class StateUtil {
     
     static final String OBJECT = "java/lang/Object";
     static final String ACTOR = "abs/api/Actor";
+    static final String CONTEXT = "abs/api/Context";
     static final String FUNCTIONAL = "abs/api/Functional";
     static final Function<String, String> ABS_TO_JDK;
     static final Set<String> BUILT_IN_ABS;

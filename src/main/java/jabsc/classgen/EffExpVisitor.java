@@ -15,21 +15,23 @@ import javassist.bytecode.Bytecode;
 final class EffExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     private final VisitorState state;
-    
+    private final TypeVisitor typeVisitor;
+
     EffExpVisitor(VisitorState state) {
         this.state = state;
+        this.typeVisitor = new TypeVisitor(state);
     }
-    
+
     @Override
     public Bytecode visit(New p, Bytecode arg) {
-        // TODO Auto-generated method stub
+        String className = p.type_.accept(typeVisitor, new StringBuilder()).toString();
+        // arg.addNew(p.type_);
         return null;
     }
 
     @Override
     public Bytecode visit(NewLocal p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return visit(new New(p.type_, p.listpureexp_), arg);
     }
 
     @Override
