@@ -39,8 +39,9 @@ final class LiteralVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(LInt p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg.addLconst(p.integer_.longValue());
+        arg.addInvokestatic("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;");
+        return arg;
     }
 
     @Override

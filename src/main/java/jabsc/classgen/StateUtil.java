@@ -51,7 +51,7 @@ final class StateUtil {
     }
     
     static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
-    static final Pattern MODULE_NAME = Pattern.compile("^(.*)\\/[^\\/]+)$");
+    static final Pattern MODULE_NAME = Pattern.compile("^(.*)\\/[^\\/]+$");
     static final String VOID_WRAPPER_CLASS_NAME = "Void";
     static final String VOID_PRIMITIVE_NAME = "void";
     static final String LITERAL_THIS = "this";

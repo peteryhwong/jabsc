@@ -171,7 +171,7 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
         return map;
     }
 
-    private String getFullyQualifiedName(StringBuilder prefix, String name) {
+    private static String getFullyQualifiedName(StringBuilder prefix, String name) {
         String fname = prefix.append(name).toString();
         prefix.setLength(prefix.length() - name.length());
         return fname;

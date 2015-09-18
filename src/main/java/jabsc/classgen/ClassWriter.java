@@ -1,5 +1,7 @@
 package jabsc.classgen;
 
+import javassist.bytecode.ExceptionsAttribute;
+
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
@@ -295,7 +297,23 @@ final class ClassWriter implements Closeable {
 
         MethodInfo staticMethod =
             createMethodInfo("main", "([Ljava/lang/String;)V", MethodType.STATIC);
+        /*
+         * The main method
+         */
         Bytecode staticCode = new Bytecode(constPool);
+
+        /*
+         * create context
+         */
+        staticCode.addInvokestatic("abs/api/Configuration", "newConfiguration",
+            "()Labs/api/Configuration$ConfigurationBuilder;");
+        staticCode.addInvokevirtual("abs/api/Configuration$ConfigurationBuilder", "buildContext",
+            "()Labs/api/Context;");
+        
+        /*
+         * pop to local variable 1
+         */
+        staticCode.addAstore(1);
         staticCode.addNew(classFile.getName());
 
         /*
@@ -309,15 +327,25 @@ final class ClassWriter implements Closeable {
         staticCode.addInvokespecial(classFile.getName(), MethodInfo.nameInit, "()V");
 
         /*
-         * pop to local variable 1
+         * pop to local variable 2
          */
-        staticCode.addAstore(1);
+        staticCode.addAstore(2);
 
+        /*
+         * push from local variable 2
+         */
+        staticCode.addAload(2);
+        staticCode.addInvokevirtual(classFile.getName(), "main", "()V");
+        
         /*
          * push from local variable 1
          */
         staticCode.addAload(1);
-        staticCode.addInvokevirtual(classFile.getName(), "main", "()V");
+        
+        /*
+         * stop context
+         */
+        staticCode.addInvokeinterface("abs/api/Context", "stop", "()V", 1);
         staticCode.addReturn(null);
 
         /*
@@ -325,6 +353,14 @@ final class ClassWriter implements Closeable {
          */
         staticCode.setMaxLocals(1);
         staticMethod.setCodeAttribute(staticCode.toCodeAttribute());
+
+        /*
+         * main method throws Exception.
+         */
+        ExceptionsAttribute cattr = new ExceptionsAttribute(constPool);
+        cattr.setExceptions(new String[] {"java/lang/Exception"});
+        staticMethod.setExceptionsAttribute(cattr);
+
         classFile.addMethod2(staticMethod);
     }
 
@@ -350,11 +386,12 @@ final class ClassWriter implements Closeable {
         code.addInvokestatic(StateUtil.FUNCTIONAL, "toString",
             "(Ljava/lang/Object;)Ljava/lang/String;");
         code.addOpcode(Opcode.ARETURN);
-
+        code.setMaxLocals(1);
+        
         MethodInfo methodInfo =
             createMethodInfo("toString", "()Ljava/lang/String;", MethodType.CONCRETE);
         methodInfo.setCodeAttribute(code.toCodeAttribute());
-
+        
         try {
             classFile.addMethod(methodInfo);
         } catch (DuplicateMemberException e) {

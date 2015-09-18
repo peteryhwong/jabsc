@@ -41,7 +41,10 @@ final class EffExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SyncMethCall p, Bytecode arg) {
-        // TODO Auto-generated method stub
+        /*
+         * Resolves object reference
+         */
+        p.pureexp_.accept(pureExpVisitor, arg);
         return null;
     }
 

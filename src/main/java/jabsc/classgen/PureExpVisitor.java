@@ -1,7 +1,5 @@
 package jabsc.classgen;
 
-import javassist.bytecode.Opcode;
-
 import bnfc.abs.Absyn.Case;
 import bnfc.abs.Absyn.EAdd;
 import bnfc.abs.Absyn.EAnd;
@@ -31,37 +29,51 @@ import bnfc.abs.Absyn.EVar;
 import bnfc.abs.Absyn.If;
 import bnfc.abs.Absyn.Let;
 import bnfc.abs.Absyn.PureExp.Visitor;
+import jabsc.classgen.VisitorState.ModuleInfo;
 import javassist.bytecode.Bytecode;
+import javassist.bytecode.Opcode;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
+    private static final Map<String, String> FUNCTIONALS = new HashMap<>();
+
+    static {
+        FUNCTIONALS.put("toString", "(Ljava/lang/Object;)Ljava/lang/String;");
+    }
+
     private final VisitorState state;
     private final LiteralVisitor literalVisitor;
-    
+    private final ModuleInfo currentModule;
+
     PureExpVisitor(VisitorState state) {
         this.state = state;
         this.literalVisitor = new LiteralVisitor();
+        this.currentModule = state.getCurrentModule();
     }
-    
+
     private static Bytecode addOperation(int opcode, Bytecode arg) {
         int index = arg.getSize() - 1;
-        arg.addOpcode(opcode); //1
-        
+        arg.addOpcode(opcode); // 1
+
         int firstByte = index + 6 >> 8;
         int secondByte = index + 6;
-        arg.add(firstByte, secondByte); //3
-        
-        arg.addIconst(1); //4
-        arg.addOpcode(Opcode.GOTO); //5
-        
+        arg.add(firstByte, secondByte); // 3
+
+        arg.addIconst(1); // 4
+        arg.addOpcode(Opcode.GOTO); // 5
+
         firstByte = index + 9 >> 8;
         secondByte = index + 9;
-        arg.add(firstByte, secondByte); //7
-        
-        arg.addIconst(0); //8
+        arg.add(firstByte, secondByte); // 7
+
+        arg.addIconst(0); // 8
         return arg;
     }
-    
+
     @Override
     public Bytecode visit(EOr p, Bytecode arg) {
         p.pureexp_1.accept(this, arg);
@@ -162,6 +174,21 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EFunCall p, Bytecode arg) {
+        String dotPrefix = "." + p.lident_;
+        Optional<String> fullImport =
+            currentModule.getImports().stream().filter(s -> s.endsWith(dotPrefix)).findFirst();
+        p.listpureexp_.forEach(e -> e.accept(this, arg));
+        if (fullImport.isPresent()) {
+            String qualified = fullImport.get();
+            String descriptor = state.getDescriptor(qualified);
+            String module = qualified.substring(0, qualified.length() - dotPrefix.length());
+            String function = state.getModuleInfos(module).getFunctionClassName();
+            String className = (module + '.' + function).replace('.', '/');
+            arg.addInvokestatic(className, p.lident_, descriptor);
+        } else {
+            String descriptor = FUNCTIONALS.get(p.lident_);
+            arg.addInvokestatic(StateUtil.FUNCTIONAL, p.lident_, descriptor);
+        }
         return arg;
     }
 

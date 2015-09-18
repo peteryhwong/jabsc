@@ -90,7 +90,7 @@ final class VisitorState {
 
     private final Map<String, String> classNames = new HashMap<>();
 
-    private static final class ModuleInfo {
+    static final class ModuleInfo {
 
         /**
          * Module name
@@ -131,6 +131,38 @@ final class VisitorState {
          * Declared names (constructors, methods) to their signatures
          */
         private final Map<String, String> nameToSignature = new HashMap<>();
+        
+        public Set<String> getImports() {
+            return imports;
+        }
+        
+        public Set<String> getExports() {
+            return exports;
+        }
+        
+        public String getFunctionClassName() {
+            return functionClassName;
+        }
+        
+        public String getMainClassName() {
+            return mainClassName;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public Map<String, String> getNameToQualifiedName() {
+            return nameToQualifiedName;
+        }
+        
+        public Map<String, String> getNameToSignature() {
+            return nameToSignature;
+        }
+        
+        public Map<String, String> getQualifiedDeclarations() {
+            return qualifiedDeclarations;
+        }
 
     }
 
@@ -207,6 +239,14 @@ final class VisitorState {
     VisitorState setCurrentModule(Modul module) {
         this.currentModule = moduleInfos.get(module);
         return this;
+    }
+    
+    ModuleInfo getCurrentModule() {
+        return currentModule;
+    }
+    
+    ModuleInfo getModuleInfos(String moduleName) {
+        return moduleInfos.get(moduleName);
     }
 
     String getDescriptor(String fullyQualifiedName) {
