@@ -5,11 +5,14 @@ import bnfc.abs.Absyn.AnyIdent.Visitor;
 import bnfc.abs.Absyn.AnyTyIden;
 import bnfc.abs.Absyn.Decl;
 import bnfc.abs.Absyn.Modul;
+import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.Prog;
 import bnfc.abs.Absyn.QType;
+import bnfc.abs.Absyn.Type;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -31,7 +34,7 @@ final class VisitorState {
                  * import fully.qualified.Name1, fully.qualified.Name2, ...;
                  */
                 return p.ttype_.accept((ts, as) -> {
-                    ts.listttypesegment_.stream().forEach(segt -> segt.accept((seg, names) -> {
+                    ts.listttypesegment_.forEach(segt -> segt.accept((seg, names) -> {
                         names.add(seg.uident_);
                         return null;
                     }, arg));
@@ -46,7 +49,7 @@ final class VisitorState {
                  */
                 String moduleName = p.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
-                p.listanyident_.stream().forEach(anyIdent -> {
+                p.listanyident_.forEach(anyIdent -> {
                     anyIdent.accept(new Visitor<Void, Set<String>>() {
 
                         @Override
@@ -88,7 +91,7 @@ final class VisitorState {
     private final Map<String, String> classNames = new HashMap<>();
 
     private static final class ModuleInfo {
-        
+
         /**
          * Module name
          */
@@ -123,7 +126,12 @@ final class VisitorState {
          * Import names to their fully qualified names
          */
         private final Map<String, String> nameToQualifiedName = new HashMap<>();
-        
+
+        /**
+         * Declared names (constructors, methods) to their signatures
+         */
+        private final Map<String, String> nameToSignature = new HashMap<>();
+
     }
 
     private final Map<String, Modul> moduls = new HashMap<>();
@@ -175,11 +183,11 @@ final class VisitorState {
     String getFunctionName(Modul module) {
         return moduleInfos.get(module).functionClassName;
     }
-    
+
     String getMainName(Modul module) {
         return moduleInfos.get(module).mainClassName;
     }
-    
+
     Set<String> getModuleToExports(String moduleName) {
         return moduleInfos.get(moduls.get(moduleName)).exports;
     }
@@ -199,6 +207,29 @@ final class VisitorState {
     VisitorState setCurrentModule(Modul module) {
         this.currentModule = moduleInfos.get(module);
         return this;
+    }
+
+    String getDescriptor(String fullyQualifiedName) {
+        Matcher matcher = StateUtil.MODULE_NAME.matcher(fullyQualifiedName);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException();
+        }
+
+        String moduleName = matcher.group(1).replace('/', '.');
+        Modul mod = moduls.get(moduleName);
+        if (mod == null) {
+            throw new IllegalArgumentException();
+        }
+
+        ModuleInfo module = moduleInfos.get(moduls.get(moduleName));
+
+        String declaration = fullyQualifiedName.substring(moduleName.length() + 1);
+        String signature = module.nameToSignature.get(declaration);
+        if (signature == null) {
+            throw new IllegalArgumentException();
+        }
+
+        return signature;
     }
 
     private static void updateName(StringBuilder name, String against) {
@@ -267,8 +298,7 @@ final class VisitorState {
                 return null;
             }, null));
 
-        moduleInfos.keySet().forEach(m -> {
-            ModuleInfo info = moduleInfos.get(m);
+        moduleInfos.forEach((m, info) -> {
             m.listimport_.forEach(im -> im.accept(importVisitor, info.imports));
             info.imports.forEach(d -> {
                 Matcher mt = StateUtil.UNQUALIFIED_CLASSNAME.matcher(d);
@@ -291,6 +321,12 @@ final class VisitorState {
                     classNames.put(c, c);
                 }
             });
+
+        BiFunction<Type, List<Param>, String> descriptorCreator =
+            new DescriptorCreator().apply(this::processQType);
+
+        moduleInfos.forEach((m, info) -> m.listdecl_.forEach(d -> d.accept(new DescriptorVisitor(
+            info.name, classNames::get, descriptorCreator), info.nameToSignature)));
 
         return this;
     }

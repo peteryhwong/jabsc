@@ -1,12 +1,10 @@
 package jabsc.classgen;
 
-import javassist.bytecode.DuplicateMemberException;
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
 import bnfc.abs.Absyn.MethClassBody;
 import bnfc.abs.Absyn.MethSig;
-import bnfc.abs.Absyn.Par;
 import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.Stm;
@@ -15,6 +13,7 @@ import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.ClassFile;
 import javassist.bytecode.ConstPool;
+import javassist.bytecode.DuplicateMemberException;
 import javassist.bytecode.FieldInfo;
 import javassist.bytecode.MethodInfo;
 import javassist.bytecode.Opcode;
@@ -26,9 +25,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -41,9 +37,6 @@ final class ClassWriter implements Closeable {
     private final Path outputDirectory;
     private final ClassFile classFile;
     private final ConstPool constPool;
-
-    private final Function<VisitorState, BiFunction<Type, List<Param>, String>> descriptorFun =
-        s -> (t, ps) -> ClassWriter.createDescriptor(t, ps, s);
 
     ClassWriter(Path outputDirectory, ClassFile classFile) {
         this.outputDirectory = outputDirectory;
@@ -112,7 +105,7 @@ final class ClassWriter implements Closeable {
      */
     private void addField(FieldClassBody body, VisitorState state) {
         StringBuilder builder = new StringBuilder();
-        body.type_.accept(new TypeVisitor(state), builder);
+        body.type_.accept(new TypeVisitor(state::processQType), builder);
         addField(body.lident_, builder.toString());
     }
 
@@ -129,7 +122,7 @@ final class ClassWriter implements Closeable {
         }
 
         PureExpVisitor visitor = new PureExpVisitor(state);
-        TypeVisitor typeVisitor = new TypeVisitor(state);
+        TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
         StringBuilder builder = new StringBuilder();
         bodies.forEach(b -> {
             b.type_.accept(typeVisitor, builder);
@@ -146,7 +139,7 @@ final class ClassWriter implements Closeable {
             return code;
         }
 
-        TypeVisitor typeVisitor = new TypeVisitor(state);
+        TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
         StringBuilder builder = new StringBuilder('L');
         params.stream().forEachOrdered(param -> {
             param.accept((par, bcode) -> {
@@ -233,7 +226,7 @@ final class ClassWriter implements Closeable {
     }
 
     private static String createDescriptor(Type returnType, List<Param> params, VisitorState state) {
-        TypeVisitor typeVisitor = new TypeVisitor(state);
+        TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
         StringBuilder descriptor = new StringBuilder().append('(');
 
         if (!params.isEmpty()) {
