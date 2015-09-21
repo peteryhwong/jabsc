@@ -1,7 +1,5 @@
 package jabsc.classgen;
 
-import javassist.bytecode.ExceptionsAttribute;
-
 import bnfc.abs.Absyn.Bloc;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
@@ -15,7 +13,7 @@ import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.ClassFile;
 import javassist.bytecode.ConstPool;
-import javassist.bytecode.DuplicateMemberException;
+import javassist.bytecode.ExceptionsAttribute;
 import javassist.bytecode.FieldInfo;
 import javassist.bytecode.MethodInfo;
 import javassist.bytecode.Opcode;
@@ -351,7 +349,7 @@ final class ClassWriter implements Closeable {
         /*
          * first variable points to the input string array
          */
-        staticCode.setMaxLocals(1);
+        staticCode.setMaxLocals(3);
         staticMethod.setCodeAttribute(staticCode.toCodeAttribute());
 
         /*
@@ -362,41 +360,6 @@ final class ClassWriter implements Closeable {
         staticMethod.setExceptionsAttribute(cattr);
 
         classFile.addMethod2(staticMethod);
-    }
-
-    /**
-     * Checks if this class has overridden {@link Object#toString()}.
-     * 
-     * @return true if this class has overridden {@link Object#toString()}.
-     */
-    boolean hasToString() {
-        return classFile.getMethod("toString") != null;
-    }
-
-    /**
-     * Overrides {@link Object#toString()}. Invoke this method if and only if this class does not
-     * already override {@link Object#toString()}.
-     * 
-     * @param state
-     * @throws IllegalStateException if {@link Object#toString()} has already been overridden.
-     */
-    void overrideToString(VisitorState state) {
-        Bytecode code = new Bytecode(constPool);
-        code.addAload(0);
-        code.addInvokestatic(StateUtil.FUNCTIONAL, "toString",
-            "(Ljava/lang/Object;)Ljava/lang/String;");
-        code.addOpcode(Opcode.ARETURN);
-        code.setMaxLocals(1);
-        
-        MethodInfo methodInfo =
-            createMethodInfo("toString", "()Ljava/lang/String;", MethodType.CONCRETE);
-        methodInfo.setCodeAttribute(code.toCodeAttribute());
-        
-        try {
-            classFile.addMethod(methodInfo);
-        } catch (DuplicateMemberException e) {
-            throw new IllegalStateException("toString() has already been overriden", e);
-        }
     }
 
     /**

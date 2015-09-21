@@ -149,7 +149,7 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     @Override
     public Bytecode visit(SPrint p, Bytecode arg) {
         p.pureexp_.accept(pureExpVisitor, arg);
-        arg.addInvokestatic(StateUtil.FUNCTIONAL, "println", "(Ljava/lang/String;)V");
+        arg.addInvokestatic(StateUtil.FUNCTIONAL, "println", "(Ljava/lang/Object;)V");
         return arg;
     }
 

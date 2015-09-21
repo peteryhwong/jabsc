@@ -33,8 +33,9 @@ final class LiteralVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(LStr p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        int index = arg.getConstPool().addStringInfo(p.string_);
+        arg.addLdc(index);
+        return arg;
     }
 
     @Override
