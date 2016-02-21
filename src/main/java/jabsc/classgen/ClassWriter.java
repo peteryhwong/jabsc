@@ -54,9 +54,7 @@ final class ClassWriter implements Closeable {
 
     @Override
     public void close() throws IOException {
-        File dir = outputDirectory.toFile();
-        dir.mkdirs();
-
+        outputDirectory.toFile().mkdirs();
         Path path = outputDirectory.resolve(getUnqualifiedName(classFile) + ".class");
         File file = path.toFile();
         file.createNewFile();
@@ -85,14 +83,11 @@ final class ClassWriter implements Closeable {
     }
 
     void setInterfaces(List<QType> interfaces, VisitorState state) {
-        String[] nameArray;
-        if (interfaces.isEmpty()) {
-            nameArray = new String[] {StateUtil.ACTOR};
-        } else {
-            nameArray =
-                interfaces.stream().map(state::processQType).map(s -> s.replace('.', '/'))
-                    .collect(Collectors.toSet()).toArray(new String[interfaces.size() + 1]);
-            nameArray[nameArray.length - 1] = StateUtil.ACTOR;
+        String[] nameArray = new String[interfaces.size() + 1];
+        nameArray[nameArray.length - 1] = StateUtil.ACTOR;
+        if (! interfaces.isEmpty()) {
+            interfaces.stream().map(state::processQType).map(s -> s.replace('.', '/'))
+                    .collect(Collectors.toSet()).toArray(nameArray);
         }
         classFile.setInterfaces(nameArray);
     }

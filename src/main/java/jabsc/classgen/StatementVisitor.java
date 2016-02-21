@@ -23,6 +23,7 @@ import bnfc.abs.Absyn.STryCatchFinally;
 import bnfc.abs.Absyn.SWhile;
 import bnfc.abs.Absyn.Stm;
 import javassist.bytecode.Bytecode;
+import javassist.bytecode.Opcode;
 
 final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
@@ -58,20 +59,21 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SBlock p, Bytecode arg) {
-        p.liststm_.stream().forEachOrdered(stm -> stm.accept(this, arg));
+        p.liststm_.forEach(stm -> stm.accept(this, arg));
         return arg;
     }
 
     @Override
     public Bytecode visit(SWhile p, Bytecode arg) {
-        
+        // TODO Auto-generated method stub
         return null;
     }
 
     @Override
     public Bytecode visit(SReturn p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        p.exp_.accept(expVisitor, arg);
+        arg.addOpcode(Opcode.ARETURN);
+        return arg;
     }
 
     @Override
