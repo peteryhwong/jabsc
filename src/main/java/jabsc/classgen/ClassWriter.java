@@ -1,6 +1,16 @@
 package jabsc.classgen;
 
-import bnfc.abs.Absyn.Bloc;
+import java.io.Closeable;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.stream.Collectors;
+
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
 import bnfc.abs.Absyn.MethClassBody;
@@ -17,16 +27,6 @@ import javassist.bytecode.ExceptionsAttribute;
 import javassist.bytecode.FieldInfo;
 import javassist.bytecode.MethodInfo;
 import javassist.bytecode.Opcode;
-
-import java.io.Closeable;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.stream.Collectors;
 
 final class ClassWriter implements Closeable {
 
@@ -136,7 +136,7 @@ final class ClassWriter implements Closeable {
 
         TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
         StringBuilder builder = new StringBuilder('L');
-        params.stream().forEachOrdered(param -> {
+        params.forEach(param -> {
             param.accept((par, bcode) -> {
                 builder.setLength(1);
                 par.type_.accept(typeVisitor, builder);
@@ -216,6 +216,7 @@ final class ClassWriter implements Closeable {
 
         MethodInfo minfo =
             createMethodInfo(MethodInfo.nameInit, null, params, state, MethodType.CONSTRUCTOR);
+        
         minfo.setCodeAttribute(code.toCodeAttribute());
         classFile.addMethod2(minfo);
     }
@@ -365,9 +366,20 @@ final class ClassWriter implements Closeable {
      */
     void addMethod(MethClassBody body, VisitorState state) {
         Bytecode code = new Bytecode(constPool);
-        StatementVisitor statementVisitor = new StatementVisitor(state);
+        
+        /*
+         * Capture method parameters
+         */
+        List<String> params = new ArrayList<>();
+        body.listparam_.forEach(param -> param.accept((par, sb) -> {
+            params.add(par.lident_);
+            return null;
+        }, null));
+        
+        MethodState methodState = new MethodState(params.toArray(new String[params.size()]));
+        StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
 
-        body.block_.accept((Bloc bloc, Void v) -> {
+        body.block_.accept((bloc, v) -> {
             bloc.liststm_.forEach(stm -> stm.accept(statementVisitor, code));
             return null;
         }, null);

@@ -15,14 +15,20 @@ import javassist.bytecode.Bytecode;
 
 final class EffExpVisitor implements Visitor<Bytecode, Bytecode> {
 
+    private final MethodState methodState;
     private final VisitorState state;
     private final TypeVisitor typeVisitor;
     private final PureExpVisitor pureExpVisitor;
 
     EffExpVisitor(VisitorState state) {
+        this(null, state);
+    }
+    
+    EffExpVisitor(MethodState methodState, VisitorState state) {
+        this.methodState = methodState;
         this.state = state;
         this.typeVisitor = new TypeVisitor(state::processQType);
-        this.pureExpVisitor = new PureExpVisitor(state);
+        this.pureExpVisitor = new PureExpVisitor(methodState, state);
     }
 
     @Override

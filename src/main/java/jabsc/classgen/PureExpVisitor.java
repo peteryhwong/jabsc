@@ -45,11 +45,17 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         FUNCTIONALS.put("toString", "(Ljava/lang/Object;)Ljava/lang/String;");
     }
 
+    private final MethodState methodState;
     private final VisitorState state;
     private final LiteralVisitor literalVisitor;
     private final ModuleInfo currentModule;
 
     PureExpVisitor(VisitorState state) {
+        this(null, state);
+    }
+        
+    PureExpVisitor(MethodState methodState, VisitorState state) {
+        this.methodState = methodState;
         this.state = state;
         this.literalVisitor = new LiteralVisitor();
         this.currentModule = state.getCurrentModule();

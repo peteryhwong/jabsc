@@ -20,7 +20,7 @@ public final class ProgramVisitor implements Program.Visitor<Void, Void> {
     @Override
     public Void visit(Prog p, Void arg) {
         state.buildProgramDeclarationTypes(p);
-        p.listmodule_.stream().forEach(mod -> mod.accept(visitor, null));
+        p.listmodule_.forEach(mod -> mod.accept(visitor, null));
         return arg;
     }
 
