@@ -1,9 +1,8 @@
 package jabsc.classgen;
 
+import bnfc.abs.Absyn.Exp;
 import bnfc.abs.Absyn.ExpE;
 import bnfc.abs.Absyn.ExpP;
-
-import bnfc.abs.Absyn.Exp;
 import bnfc.abs.Absyn.SAss;
 import bnfc.abs.Absyn.SAssert;
 import bnfc.abs.Absyn.SAwait;
@@ -22,8 +21,6 @@ import bnfc.abs.Absyn.SThrow;
 import bnfc.abs.Absyn.STryCatchFinally;
 import bnfc.abs.Absyn.SWhile;
 import bnfc.abs.Absyn.Stm;
-import gnu.trove.list.TIntList;
-import gnu.trove.list.array.TIntArrayList;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.Opcode;
 
@@ -72,24 +69,17 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     }
 
     @Override
-    public Bytecode visit(SWhile p, Bytecode arg) {
-        arg.addOpcode(Bytecode.GOTO);
-        TIntList opcodes = TCollectionUtil.createIntList();
-        
-        
-        int i=0;
-        while (arg != null && i < 10) {
-            System.out.println();
-            i++;
-        }
-        // TODO Auto-generated method stub
-        return null;
+    public Bytecode visit(SWhile p, Bytecode arg) {        
+        p.pureexp_.accept(pureExpVisitor, arg);
+        Bytecode subCode = p.stm_.accept(this, ByteCodeUtil.newByteCode(arg));
+        ByteCodeUtil.addBranch(arg, Opcode.GOTO, 0);
+        return arg;
     }
 
     @Override
     public Bytecode visit(SReturn p, Bytecode arg) {
-        p.exp_.accept(expVisitor, arg);
-        //TODO need to find a way to load the value of exp_ onto the stack
+        Bytecode bt = p.exp_.accept(expVisitor, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.add(bt, arg);
         arg.addOpcode(Opcode.ARETURN);
         return arg;
     }

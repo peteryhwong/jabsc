@@ -300,8 +300,8 @@ final class ClassWriter implements Closeable {
          * create context
          */
         staticCode.addInvokestatic("abs/api/Configuration", "newConfiguration",
-            "()Labs/api/Configuration$ConfigurationBuilder;");
-        staticCode.addInvokevirtual("abs/api/Configuration$ConfigurationBuilder", "buildContext",
+            "()Labs/api/ConfigurationBuilder;");
+        staticCode.addInvokevirtual("abs/api/ConfigurationBuilder", "buildContext",
             "()Labs/api/Context;");
         
         /*

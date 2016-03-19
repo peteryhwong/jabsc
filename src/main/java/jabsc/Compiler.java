@@ -24,6 +24,7 @@ import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.Module;
 import bnfc.abs.Absyn.Prog;
 import bnfc.abs.Absyn.Program;
+import jabsc.classgen.ProgramVisitor;
 
 /**
  * Entry point to ABS to Java compiler.
@@ -144,16 +145,19 @@ public class Compiler implements Runnable {
     final Prog prog = (Prog) program;
     final String packageName = getPackageName(prog);
     final Path sourcePath = createSourcePath(packageName, source, outputDirectory);
-    final Visitor visitor = new Visitor(packageName, prog,
-        new DefaultJavaWriterSupplier(PathResolver.DEFAULT_PATH_RESOLVER, packageName,
-            outputDirectory),
-        new JavaTypeTranslator(), outputDirectory);
     Files.createDirectories(sourcePath.getParent());
-    try (final Writer writer = createWriter(sourcePath)) {
-      JavaWriter jw = new JavaWriter(writer);
-      prog.accept(visitor, jw);
-      return sourcePath;
-    }
+    prog.accept(new ProgramVisitor(packageName, outputDirectory), null);
+    return sourcePath;
+//    final Visitor visitor = new Visitor(packageName, prog,
+//        new DefaultJavaWriterSupplier(PathResolver.DEFAULT_PATH_RESOLVER, packageName,
+//            outputDirectory),
+//        new JavaTypeTranslator(), outputDirectory);
+//    Files.createDirectories(sourcePath.getParent());
+//    try (final Writer writer = createWriter(sourcePath)) {
+//      JavaWriter jw = new JavaWriter(writer);
+//      prog.accept(visitor, jw);
+//      return sourcePath;
+//    }
   }
 
   /**

@@ -28,6 +28,7 @@ import bnfc.abs.Absyn.EThis;
 import bnfc.abs.Absyn.EVar;
 import bnfc.abs.Absyn.If;
 import bnfc.abs.Absyn.Let;
+import bnfc.abs.Absyn.PureExp;
 import bnfc.abs.Absyn.PureExp.Visitor;
 import jabsc.classgen.VisitorState.ModuleInfo;
 import javassist.bytecode.Bytecode;
@@ -61,25 +62,15 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         this.currentModule = state.getCurrentModule();
     }
 
-    private static Bytecode addOperation(int opcode, Bytecode arg) {
-        int index = arg.getSize() - 1;
-        arg.addOpcode(opcode); // 1
-
-        int firstByte = index + 6 >> 8;
-        int secondByte = index + 6;
-        arg.add(firstByte, secondByte); // 3
-
-        arg.addIconst(1); // 4
-        arg.addOpcode(Opcode.GOTO); // 5
-
-        firstByte = index + 9 >> 8;
-        secondByte = index + 9;
-        arg.add(firstByte, secondByte); // 7
-
-        arg.addIconst(0); // 8
-        return arg;
+    private Bytecode arithmetic(PureExp lhs, PureExp rhs, int operation, Bytecode arg) {
+        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        arg.addOpcode(operation);
+        return ByteCodeUtil.toLong(arg);
     }
-
+    
     @Override
     public Bytecode visit(EOr p, Bytecode arg) {
         p.pureexp_1.accept(this, arg);
@@ -96,68 +87,58 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EEq p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPEQ, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(ENeq p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPNE, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(ELt p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPLT, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(ELe p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPLE, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(EGt p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPGT, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(EGe p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return addOperation(Opcode.IF_ICMPGE, arg);
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public Bytecode visit(EAdd p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LADD, arg);
     }
 
     @Override
     public Bytecode visit(ESub p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LSUB, arg);
     }
 
     @Override
     public Bytecode visit(EMul p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LMUL, arg);
     }
 
     @Override
     public Bytecode visit(EDiv p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LDIV, arg);
     }
 
     @Override

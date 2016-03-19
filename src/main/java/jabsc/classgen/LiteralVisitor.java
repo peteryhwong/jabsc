@@ -10,25 +10,26 @@ import bnfc.abs.Absyn.LTrue;
 
 import bnfc.abs.Absyn.Literal.Visitor;
 import javassist.bytecode.Bytecode;
+import javassist.bytecode.Opcode;
 
 final class LiteralVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(LNull p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg.add(Opcode.ACONST_NULL);
+        return arg;
     }
 
     @Override
     public Bytecode visit(LThis p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg.addIload(0);
+        return arg;
     }
 
     @Override
     public Bytecode visit(LThisDC p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        // TODO
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -41,20 +42,19 @@ final class LiteralVisitor implements Visitor<Bytecode, Bytecode> {
     @Override
     public Bytecode visit(LInt p, Bytecode arg) {
         arg.addLconst(p.integer_.longValue());
-        arg.addInvokestatic("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;");
-        return arg;
+        return ByteCodeUtil.toLong(arg);
     }
 
     @Override
     public Bytecode visit(LFalse p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg.addGetstatic("java/lang/Boolean", "FALSE", "Ljava/lang/Boolean;");
+        return arg;
     }
 
     @Override
     public Bytecode visit(LTrue p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg.addGetstatic("java/lang/Boolean", "TRUE", "Ljava/lang/Boolean;");
+        return arg;
     }
 
 }
