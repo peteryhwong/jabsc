@@ -46,7 +46,6 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         FUNCTIONALS.put("toString", "(Ljava/lang/Object;)Ljava/lang/String;");
     }
 
-    private final MethodState methodState;
     private final VisitorState state;
     private final LiteralVisitor literalVisitor;
     private final ModuleInfo currentModule;
@@ -55,27 +54,19 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         this(null, state);
     }
         
+    @Deprecated
     PureExpVisitor(MethodState methodState, VisitorState state) {
-        this.methodState = methodState;
         this.state = state;
         this.literalVisitor = new LiteralVisitor();
         this.currentModule = state.getCurrentModule();
     }
 
-    private Bytecode arithmetic(PureExp lhs, PureExp rhs, int operation, Bytecode arg) {
-        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
-        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
-        arg.addOpcode(operation);
-        return ByteCodeUtil.toLong(arg);
-    }
-    
     /**
+     * Evaluate a boolean statement (conjunction or disjunction)
      * 
      * @param lhs
      * @param rhs
-     * @param branchOp
+     * @param branchOp boolean operation (conjunction or disjunction)
      * @param defaultValue
      * @param branchValue
      * @param arg
@@ -103,14 +94,14 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         int offsetIndexRhs = arg.currentPc();
         arg.add(-1, -1);
 
-        // default location
+        // fall through value
         arg.addOpcode(defaultValue);
         arg.add(Opcode.GOTO);
         // 2 byte place holders for offset
         int offsetIndexEnd = arg.currentPc();
         arg.add(-1, -1);
 
-        // branch location
+        // branch value
         int endOffset = arg.currentPc();
         arg.addOpcode(branchValue);
 
@@ -142,42 +133,118 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         return booleanOp(p.pureexp_1, p.pureexp_2, Opcode.IFEQ, Opcode.ICONST_1, Opcode.ICONST_0, arg);
     }
 
+    private Bytecode equals(PureExp lhs, PureExp rhs, Bytecode arg) {
+        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.add(sub, arg);
+        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.add(sub, arg);
+        arg.addInvokestatic("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z");
+        return ByteCodeUtil.toBoolean(arg);
+    }
+    
     @Override
     public Bytecode visit(EEq p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return equals(p.pureexp_1, p.pureexp_2, arg);
     }
 
     @Override
     public Bytecode visit(ENeq p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        /*
+         * branch to endOffset if 0 (false)
+         * Opcode.ICONST_1 if exp
+         * Opcode.ICONST_0 if ! exp
+         */
+        // Evaluate expression against equals
+        Bytecode sub = equals(p.pureexp_1, p.pureexp_2, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
+        
+        // branch to endOffset if operation is false
+        arg.addOpcode(Opcode.IFNE);
+        // 2 byte place holders for offset
+        int offsetIndex = arg.currentPc();
+        arg.add(-1, -1);
+
+        // fall through value
+        arg.addOpcode(Opcode.ICONST_1);
+        arg.add(Opcode.GOTO);
+        // 2 byte place holders for offset
+        int offsetIndexEnd = arg.currentPc();
+        arg.add(-1, -1);
+
+        // branch value
+        int endOffset = arg.currentPc();
+        arg.addOpcode(Opcode.ICONST_0);
+
+        // Update offsets
+        arg.write16bit(offsetIndex, endOffset - offsetIndex + 1);
+        arg.write16bit(offsetIndexEnd, arg.currentPc() - offsetIndexEnd + 1);
+        return ByteCodeUtil.toBoolean(arg);
+    }
+    
+    private Bytecode longComparison(PureExp lhs, PureExp rhs, int cmpOp, Bytecode arg) {
+        // Evaluate lhs
+        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+
+        // Evaluate rhs
+        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        
+        // Compare two values
+        arg.addOpcode(Opcode.LCMP);
+
+        // branch to endOffset if operation is true
+        arg.addOpcode(cmpOp);
+        // 2 byte place holders for offset
+        int offsetIndex = arg.currentPc();
+        arg.add(-1, -1);
+
+        // fall through location
+        arg.addOpcode(Opcode.ICONST_0);
+        arg.add(Opcode.GOTO);
+        // 2 byte place holders for offset
+        int offsetIndexEnd = arg.currentPc();
+        arg.add(-1, -1);
+
+        // branch location
+        int endOffset = arg.currentPc();
+        arg.addOpcode(Opcode.ICONST_1);
+
+        // Update offsets
+        arg.write16bit(offsetIndex, endOffset - offsetIndex + 1);
+        arg.write16bit(offsetIndexEnd, arg.currentPc() - offsetIndexEnd + 1);
+        return ByteCodeUtil.toBoolean(arg);
     }
 
     @Override
     public Bytecode visit(ELt p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFLT, arg);
     }
 
     @Override
     public Bytecode visit(ELe p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFLE, arg);
     }
 
     @Override
     public Bytecode visit(EGt p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFGT, arg);
     }
 
     @Override
     public Bytecode visit(EGe p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFGE, arg);
     }
 
+    private Bytecode arithmetic(PureExp lhs, PureExp rhs, int operation, Bytecode arg) {
+        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        arg.addOpcode(operation);
+        return ByteCodeUtil.toLong(arg);
+    }
+    
     @Override
     public Bytecode visit(EAdd p, Bytecode arg) {
         return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LADD, arg);
