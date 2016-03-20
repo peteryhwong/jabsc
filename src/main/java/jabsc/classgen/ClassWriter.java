@@ -393,7 +393,11 @@ final class ClassWriter implements Closeable {
         if (methodInfo.getDescriptor().endsWith("V")) {
             code.addReturn(null);
         }
-
+        
+        /*
+         * TODO StackMapTable
+         * StackMapTable.Writer writer = new StackMapTable.Writer(32);
+         */
         methodInfo.setCodeAttribute(code.toCodeAttribute());
         classFile.addMethod2(methodInfo);
     }

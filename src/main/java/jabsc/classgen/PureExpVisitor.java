@@ -1,5 +1,9 @@
 package jabsc.classgen;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
 import bnfc.abs.Absyn.Case;
 import bnfc.abs.Absyn.EAdd;
 import bnfc.abs.Absyn.EAnd;
@@ -33,10 +37,6 @@ import bnfc.abs.Absyn.PureExp.Visitor;
 import jabsc.classgen.VisitorState.ModuleInfo;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.Opcode;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 
 final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
@@ -80,9 +80,51 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EAnd p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return null;
+        /*
+         * false == 0
+         * true == 1
+         * 
+         * ifeq value == 0
+         * ifne value != 0
+         */
+        
+        //Evaluate lhs
+        PureExp lhs = p.pureexp_1;
+        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
+        
+        arg.addOpcode(Opcode.IFEQ);
+        // 2 byte place holders for offset
+        int offsetIndexLhs = arg.currentPc();
+        arg.add(-1, -1);
+        
+        //Evaluate rhs
+        PureExp rhs = p.pureexp_2;
+        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
+        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
+        
+        arg.addOpcode(Opcode.IFEQ);
+        // 2 byte place holders for offset
+        int offsetIndexRhs = arg.currentPc();
+        arg.add(-1, -1);
+        
+        //lhs && rhs
+        arg.addOpcode(Opcode.ICONST_1);
+        arg.add(Opcode.GOTO);
+        // 2 byte place holders for offset
+        int offsetIndexEnd = arg.currentPc();
+        arg.add(-1, -1);
+        
+        //! (lhs && rhs)
+        int endOffset = arg.currentPc();
+        arg.addOpcode(Opcode.ICONST_0);
+        
+        // Update offsets
+        arg.write16bit(offsetIndexLhs, endOffset - offsetIndexLhs + 1);
+        arg.write16bit(offsetIndexRhs, endOffset - offsetIndexRhs + 1);
+        arg.write16bit(offsetIndexEnd, arg.currentPc() - offsetIndexEnd + 1);
+
+        return ByteCodeUtil.toBoolean(arg);
     }
 
     @Override

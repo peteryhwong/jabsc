@@ -12,9 +12,42 @@ final class ByteCodeUtil {
             Opcode.IFNULL, Opcode.IF_ACMPEQ, Opcode.IF_ACMPNE, Opcode.IF_ICMPEQ, Opcode.IF_ICMPGE,
             Opcode.IF_ICMPGT, Opcode.IF_ICMPLE, Opcode.IF_ICMPLT, Opcode.IF_ICMPNE, Opcode.GOTO});
 
+    static class TwoBytes {
+
+        private final int firstByte;
+        private final int secondByte;
+
+        private TwoBytes(int firstByte, int secondByte) {
+            this.firstByte = firstByte;
+            this.secondByte = secondByte;
+        }
+
+        static TwoBytes fromOffet(int offset) {
+            int firstByte = (offset >> 8) & 0xff;
+            int secondByte = offset & 0xff;
+            return new TwoBytes(firstByte, secondByte);
+        }
+
+        /**
+         * Joins two branch bytes as the offset.
+         * @return
+         */
+        int toOffset() {
+            return ByteCodeUtil.offset(firstByte, secondByte);
+        }
+
+        int getFirstByte() {
+            return firstByte;
+        }
+
+        int getSecondByte() {
+            return secondByte;
+        }
+    }
+
     /**
      * Joins two branch bytes as the offset.
-     *  
+     * 
      * @param firstByte
      * @param secondByte
      * @return
@@ -76,7 +109,7 @@ final class ByteCodeUtil {
         to.setStackDepth(to.getMaxStack() + from.getMaxStack());
         return to;
     }
-    
+
     /**
      * Add an invokestatic instruction to convert long to {@link Long}.
      * 
@@ -90,6 +123,7 @@ final class ByteCodeUtil {
 
     /**
      * Add an invokevirtual instruction to convert {@link Long} to long.
+     * 
      * @param arg
      * @return
      */
@@ -98,5 +132,26 @@ final class ByteCodeUtil {
         return arg;
     }
 
+    /**
+     * Add an invokestatic instruction to convert boolean to {@link Boolean}.
+     * 
+     * @param arg {@link Bytecode}
+     * @return the updated {@link Bytecode}
+     */
+    static Bytecode toBoolean(Bytecode arg) {
+        arg.addInvokestatic("java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;");
+        return arg;
+    }
+
+    /**
+     * Add an invokevirtual instruction to convert {@link Boolean} to boolean.
+     * 
+     * @param arg
+     * @return
+     */
+    static Bytecode toBooleanValue(Bytecode arg) {
+        arg.addInvokevirtual("java/lang/Boolean", "booleanValue", "()Z");
+        return arg;
+    }
 
 }
