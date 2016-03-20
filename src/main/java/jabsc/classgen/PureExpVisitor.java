@@ -71,60 +71,75 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         return ByteCodeUtil.toLong(arg);
     }
     
-    @Override
-    public Bytecode visit(EOr p, Bytecode arg) {
-        p.pureexp_1.accept(this, arg);
-        p.pureexp_2.accept(this, arg);
-        return null;
-    }
-
-    @Override
-    public Bytecode visit(EAnd p, Bytecode arg) {
-        /*
-         * false == 0
-         * true == 1
-         * 
-         * ifeq value == 0
-         * ifne value != 0
-         */
-        
-        //Evaluate lhs
-        PureExp lhs = p.pureexp_1;
+    /**
+     * 
+     * @param lhs
+     * @param rhs
+     * @param branchOp
+     * @param defaultValue
+     * @param branchValue
+     * @param arg
+     * @return
+     */
+    private Bytecode booleanOp(PureExp lhs, PureExp rhs, int branchOp, int defaultValue,
+                    int branchValue, Bytecode arg) {
+        // Evaluate lhs
         Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
         arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
-        
-        arg.addOpcode(Opcode.IFEQ);
+
+        // branch to endOffset if operation is true
+        arg.addOpcode(branchOp);
         // 2 byte place holders for offset
         int offsetIndexLhs = arg.currentPc();
         arg.add(-1, -1);
-        
-        //Evaluate rhs
-        PureExp rhs = p.pureexp_2;
+
+        // Evaluate rhs
         sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
         arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
-        
-        arg.addOpcode(Opcode.IFEQ);
+
+        // branch to endOffset if operation is true
+        arg.addOpcode(branchOp);
         // 2 byte place holders for offset
         int offsetIndexRhs = arg.currentPc();
         arg.add(-1, -1);
-        
-        //lhs && rhs
-        arg.addOpcode(Opcode.ICONST_1);
+
+        // default location
+        arg.addOpcode(defaultValue);
         arg.add(Opcode.GOTO);
         // 2 byte place holders for offset
         int offsetIndexEnd = arg.currentPc();
         arg.add(-1, -1);
-        
-        //! (lhs && rhs)
+
+        // branch location
         int endOffset = arg.currentPc();
-        arg.addOpcode(Opcode.ICONST_0);
-        
+        arg.addOpcode(branchValue);
+
         // Update offsets
         arg.write16bit(offsetIndexLhs, endOffset - offsetIndexLhs + 1);
         arg.write16bit(offsetIndexRhs, endOffset - offsetIndexRhs + 1);
         arg.write16bit(offsetIndexEnd, arg.currentPc() - offsetIndexEnd + 1);
 
         return ByteCodeUtil.toBoolean(arg);
+    }
+    
+    @Override
+    public Bytecode visit(EOr p, Bytecode arg) {
+        /*
+         * branch to endOffset if 1 (true)
+         * Opcode.ICONST_0 if ! (lhs || rhs)
+         * Opcode.ICONST_1 if lhs || rhs
+         */
+        return booleanOp(p.pureexp_1, p.pureexp_2, Opcode.IFNE, Opcode.ICONST_0, Opcode.ICONST_1, arg);
+    }
+
+    @Override
+    public Bytecode visit(EAnd p, Bytecode arg) {
+        /*
+         * branch to endOffset if 0 (false)
+         * Opcode.ICONST_1 if lhs && rhs
+         * Opcode.ICONST_0 if ! (lhs && rhs)
+         */
+        return booleanOp(p.pureexp_1, p.pureexp_2, Opcode.IFEQ, Opcode.ICONST_1, Opcode.ICONST_0, arg);
     }
 
     @Override
