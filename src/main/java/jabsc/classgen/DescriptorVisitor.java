@@ -46,27 +46,33 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
 
         @Override
         public Map<String, String> visit(FieldClassBody p, Map<String, String> arg) {
+            String name = fullyQualify.apply(p.lident_);
+            String descriptor = creator.apply(p.type_, Collections.emptyList()).substring(2);
+            arg.put(name, descriptor);
             return arg;
         }
 
         @Override
         public Map<String, String> visit(FieldAssignClassBody p, Map<String, String> arg) {
+            String name = fullyQualify.apply(p.lident_);
+            String descriptor = creator.apply(p.type_, Collections.emptyList()).substring(2);
+            arg.put(name, descriptor);
             return arg;
         }
 
         @Override
         public Map<String, String> visit(MethClassBody p, Map<String, String> arg) {
             String name = fullyQualify.apply(p.lident_);
-            String decriptor = creator.apply(p.type_, p.listparam_);
-            arg.put(name, decriptor);
+            String descriptor = creator.apply(p.type_, p.listparam_);
+            arg.put(name, descriptor);
             return arg;
         }
 
         @Override
         public Map<String, String> visit(MethSig p, Map<String, String> arg) {
             String name = fullyQualify.apply(p.lident_);
-            String decriptor = creator.apply(p.type_, p.listparam_);
-            arg.put(name, decriptor);
+            String descriptor = creator.apply(p.type_, p.listparam_);
+            arg.put(name, descriptor);
             return arg;
         }
 

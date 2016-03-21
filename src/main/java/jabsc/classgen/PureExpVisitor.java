@@ -46,6 +46,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         FUNCTIONALS.put("toString", "(Ljava/lang/Object;)Ljava/lang/String;");
     }
 
+    private final MethodState methodState;
     private final VisitorState state;
     private final LiteralVisitor literalVisitor;
     private final ModuleInfo currentModule;
@@ -54,8 +55,8 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         this(null, state);
     }
         
-    @Deprecated
     PureExpVisitor(MethodState methodState, VisitorState state) {
+        this.methodState = methodState;
         this.state = state;
         this.literalVisitor = new LiteralVisitor();
         this.currentModule = state.getCurrentModule();
@@ -75,8 +76,8 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
     private Bytecode booleanOp(PureExp lhs, PureExp rhs, int branchOp, int defaultValue,
                     int branchValue, Bytecode arg) {
         // Evaluate lhs
-        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
+        arg = lhs.accept(this, arg);
+        arg = ByteCodeUtil.toBooleanValue(arg);
 
         // branch to endOffset if operation is true
         arg.addOpcode(branchOp);
@@ -85,8 +86,8 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         arg.add(-1, -1);
 
         // Evaluate rhs
-        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
+        arg = rhs.accept(this, arg);
+        arg = ByteCodeUtil.toBooleanValue(arg);
 
         // branch to endOffset if operation is true
         arg.addOpcode(branchOp);
@@ -134,30 +135,18 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
     }
 
     private Bytecode equals(PureExp lhs, PureExp rhs, Bytecode arg) {
-        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.add(sub, arg);
-        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.add(sub, arg);
+        arg = lhs.accept(this, arg);
+        arg = rhs.accept(this, arg);
         arg.addInvokestatic("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z");
         return ByteCodeUtil.toBoolean(arg);
     }
     
-    @Override
-    public Bytecode visit(EEq p, Bytecode arg) {
-        return equals(p.pureexp_1, p.pureexp_2, arg);
-    }
-
-    @Override
-    public Bytecode visit(ENeq p, Bytecode arg) {
+    private Bytecode negEquals(Bytecode arg) {
         /*
          * branch to endOffset if 0 (false)
          * Opcode.ICONST_1 if exp
          * Opcode.ICONST_0 if ! exp
          */
-        // Evaluate expression against equals
-        Bytecode sub = equals(p.pureexp_1, p.pureexp_2, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toBooleanValue(ByteCodeUtil.add(sub, arg));
-        
         // branch to endOffset if operation is false
         arg.addOpcode(Opcode.IFNE);
         // 2 byte place holders for offset
@@ -181,14 +170,32 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         return ByteCodeUtil.toBoolean(arg);
     }
     
+    @Override
+    public Bytecode visit(EEq p, Bytecode arg) {
+        return equals(p.pureexp_1, p.pureexp_2, arg);
+    }
+
+    @Override
+    public Bytecode visit(ENeq p, Bytecode arg) {
+        /*
+         * branch to endOffset if 0 (false)
+         * Opcode.ICONST_1 if exp
+         * Opcode.ICONST_0 if ! exp
+         */
+        // Evaluate expression against equals
+        arg = equals(p.pureexp_1, p.pureexp_2, arg);
+        arg = ByteCodeUtil.toBooleanValue(arg);
+        return negEquals(arg);
+    }
+    
     private Bytecode longComparison(PureExp lhs, PureExp rhs, int cmpOp, Bytecode arg) {
         // Evaluate lhs
-        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        arg = lhs.accept(this, arg);
+        arg = ByteCodeUtil.toLongValue(arg);
 
         // Evaluate rhs
-        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        arg = rhs.accept(this, arg);
+        arg = ByteCodeUtil.toLongValue(arg);
         
         // Compare two values
         arg.addOpcode(Opcode.LCMP);
@@ -237,10 +244,10 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
     }
 
     private Bytecode arithmetic(PureExp lhs, PureExp rhs, int operation, Bytecode arg) {
-        Bytecode sub = lhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
-        sub = rhs.accept(this, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.toLongValue(ByteCodeUtil.add(sub, arg));
+        arg = lhs.accept(this, arg);
+        arg = ByteCodeUtil.toLongValue(arg);
+        arg = rhs.accept(this, arg);
+        arg = ByteCodeUtil.toLongValue(arg);
         arg.addOpcode(operation);
         return ByteCodeUtil.toLong(arg);
     }
@@ -267,20 +274,22 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EMod p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LREM, arg);
     }
 
     @Override
     public Bytecode visit(ELogNeg p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg = p.pureexp_.accept(this, arg);
+        arg = ByteCodeUtil.toBooleanValue(arg);
+        return negEquals(arg);
     }
 
     @Override
     public Bytecode visit(EIntNeg p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg = p.pureexp_.accept(this, arg);
+        arg = ByteCodeUtil.toLongValue(arg);
+        arg.addOpcode(Opcode.LNEG);
+        return ByteCodeUtil.toLong(arg);
     }
 
     @Override
@@ -329,8 +338,13 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EThis p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        //load this
+        arg.addAload(0);
+        String className = state.getRefinedClassName(arg.getConstPool().getClassName());
+        String fullyQualifiedName = className + "." + p.lident_;
+        String type = state.getDescriptor(fullyQualifiedName);
+        arg.addGetfield(className, p.lident_, type);
+        return arg;
     }
 
     @Override

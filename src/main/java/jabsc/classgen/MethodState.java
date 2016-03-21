@@ -13,7 +13,7 @@ final class MethodState {
      * Local variables
      */
     private final TObjectIntMap<String> locals =  TCollectionUtil.createObjectIntMap();
-
+    
     /**
      * The initial index for local variables.
      */

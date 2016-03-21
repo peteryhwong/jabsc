@@ -7,6 +7,7 @@ import bnfc.abs.Absyn.Decl;
 import bnfc.abs.Absyn.Modul;
 import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.Prog;
+import bnfc.abs.Absyn.QTyp;
 import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.Type;
 
@@ -78,7 +79,7 @@ final class VisitorState {
                  */
                 String moduleName = p.qtype_.accept(qtypeVisitor, Boolean.FALSE);
                 StringBuilder name = new StringBuilder(moduleName).append('.');
-                VisitorState.this.moduleInfos.get(moduls.get(moduleName)).exports
+                VisitorState.this.moduleInfos.get(modules.get(moduleName)).exports
                     .forEach(string -> {
                         arg.add(name.append(string).toString());
                         name.setLength(name.length() - string.length());
@@ -166,17 +167,18 @@ final class VisitorState {
 
     }
 
-    private final Map<String, Modul> moduls = new HashMap<>();
+    private final Map<String, Modul> modules = new HashMap<>();
     private final Map<Modul, ModuleInfo> moduleInfos = new HashMap<>();
 
+    /**
+     * {@link QType.Visitor} that takes a {@link QTyp} and returns its name in JVM
+     */
     private final QType.Visitor<String, Boolean> qtypeVisitor = (p, arg) -> {
 
         StringBuilder sb = new StringBuilder();
 
-        p.listqtypesegment_.forEach(s -> s.accept((seg, v) -> {
-            sb.append(seg.uident_).append('.');
-            return null;
-        }, null));
+        p.listqtypesegment_
+            .forEach(s -> s.accept((seg, v) -> sb.append(seg.uident_).append('.'), null));
 
         String type = sb.substring(0, sb.length() - 1);
         if (!arg.booleanValue()) {
@@ -200,6 +202,7 @@ final class VisitorState {
         return info.nameToQualifiedName.get(type);
 
     };
+    
     private final BiFunction<String, ElementKind, ClassWriter> classTranslator;
 
     private ModuleInfo currentModule = null;
@@ -221,11 +224,11 @@ final class VisitorState {
     }
 
     Set<String> getModuleToExports(String moduleName) {
-        return moduleInfos.get(moduls.get(moduleName)).exports;
+        return moduleInfos.get(modules.get(moduleName)).exports;
     }
 
     Set<String> getModuleToImports(String moduleName) {
-        return moduleInfos.get(moduls.get(moduleName)).imports;
+        return moduleInfos.get(modules.get(moduleName)).imports;
     }
 
     String getRefinedClassName(String name) {
@@ -256,12 +259,12 @@ final class VisitorState {
         }
 
         String moduleName = matcher.group(1).replace('/', '.');
-        Modul mod = moduls.get(moduleName);
+        Modul mod = modules.get(moduleName);
         if (mod == null) {
             throw new IllegalArgumentException();
         }
 
-        ModuleInfo module = moduleInfos.get(moduls.get(moduleName));
+        ModuleInfo module = moduleInfos.get(modules.get(moduleName));
 
         String declaration = fullyQualifiedName.substring(moduleName.length() + 1);
         String signature = module.nameToSignature.get(declaration);
@@ -273,6 +276,10 @@ final class VisitorState {
     }
 
     private static void updateName(StringBuilder name, String against) {
+        if (against.length() < name.length()) {
+            return;
+        }
+        
         for (int i = 0; i < against.length(); i++) {
             if (i == name.length()) {
                 name.append('1');
@@ -295,29 +302,35 @@ final class VisitorState {
 
                 ModuleInfo info = new ModuleInfo();
                 moduleInfos.put(m, info);
+                
+                /*
+                 * Module name
+                 */
                 info.name = m.qtype_.accept(qtypeVisitor, Boolean.FALSE);
-                moduls.put(info.name, m);
+                modules.put(info.name, m);
 
                 Consumer<String> consumeDecl = info.exports::add;
-                consumeDecl =
-                    consumeDecl.andThen(s -> updateName(function, s)).andThen(
-                        s -> updateName(main, s));
+                Consumer<String> consumeDeclAndUpdate = consumeDecl
+                                .andThen(s -> updateName(function, s))
+                                .andThen(s -> updateName(main, s));
 
                 Predicate<Decl> isFunction = StateUtil::isAbsFunctionDecl;
-                m.listdecl_.stream().filter(isFunction.negate())
-                    .map(StateUtil::getTopLevelDeclIdentifier).forEach(consumeDecl);
-
-                Set<String> functions =
-                    m.listdecl_.stream().filter(isFunction)
-                        .map(StateUtil::getTopLevelDeclIdentifier).collect(Collectors.toSet());
+                Predicate<Decl> isNotFunction = isFunction.negate();
+                
+                m.listdecl_.stream().filter(isNotFunction)
+                    .map(StateUtil::getTopLevelDeclIdentifier).forEach(consumeDeclAndUpdate);
 
                 function.append('.');
                 int functionLength = function.length();
-                functions.stream().map(f -> {
-                    String qf = function.append(f).toString();
-                    function.setLength(functionLength);
-                    return qf;
-                }).forEach(info.exports::add);
+
+                m.listdecl_.stream().filter(isFunction)
+                     .map(StateUtil::getTopLevelDeclIdentifier)
+                     .map(function::append)
+                     .map(fun -> {
+                            String qf = fun.toString();
+                            fun.setLength(functionLength);
+                            return qf;
+                         }).forEach(consumeDecl);
 
                 function.setLength(functionLength - 1);
                 info.functionClassName = function.toString();
