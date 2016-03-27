@@ -50,8 +50,17 @@ final class StateUtil {
         BUILT_IN_ABS = map.keySet();
     }
     
-    static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*\\.([^\\.]+)$");
-    static final Pattern MODULE_NAME = Pattern.compile("^(.*)\\/[^\\/]+$");
+    /**
+     * package-name.class-name or package-name/class-name
+     */
+    static final Pattern UNQUALIFIED_CLASSNAME = Pattern.compile("^.*[\\/\\.]([^\\/\\.]+)$");
+    
+    /**
+     * assume apply to only fully qualified name of a method, a field or a constructor 
+     * which has the form package-name.class-name.element-name or package-name/class-name/element-name
+     */
+    static final Pattern MODULE_NAME = Pattern.compile("^(.*)[\\/\\.][^\\/\\.]+[\\/\\.][^\\/\\.]+$");
+    
     static final String VOID_WRAPPER_CLASS_NAME = "Void";
     static final String VOID_PRIMITIVE_NAME = "void";
     static final String LITERAL_THIS = "this";

@@ -1,7 +1,7 @@
 package jabsc.classgen;
 
 import javassist.bytecode.MethodInfo;
-
+import javassist.bytecode.Opcode;
 import bnfc.abs.Absyn.AsyncMethCall;
 import bnfc.abs.Absyn.Get;
 import bnfc.abs.Absyn.New;
@@ -34,9 +34,18 @@ final class EffExpVisitor implements Visitor<Bytecode, Bytecode> {
     @Override
     public Bytecode visit(New p, Bytecode arg) {
         p.listpureexp_.forEach(e -> e.accept(pureExpVisitor, arg));
-        String className = p.type_.accept(typeVisitor, new StringBuilder()).toString();
+        
+        /*
+         * typeVisitor returns type description but does not include the 'L' prefix
+         */
+        String className = p.type_.accept(typeVisitor, new StringBuilder()).substring(1).toString();
         arg.addNew(className);
-        arg.addInvokespecial(className, MethodInfo.nameInit, state.getDescriptor(className));
+
+        /*
+         * duplicate the reference to the new object
+         */
+        arg.addOpcode(Opcode.DUP);
+        arg.addInvokespecial(className, MethodInfo.nameInit, state.getConstructorDescriptor(className));
         return arg;
     }
 

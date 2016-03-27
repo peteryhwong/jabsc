@@ -30,6 +30,7 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     private final VisitorState state;
     private final EffExpVisitor effExpVisitor;
     private final PureExpVisitor pureExpVisitor;
+    private final TypeVisitor typeVisitor;
 
     private final Exp.Visitor<Bytecode, Bytecode> expVisitor =
         new Exp.Visitor<Bytecode, Bytecode>() {
@@ -46,15 +47,12 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
         };
         
-    StatementVisitor(VisitorState state) {
-        this(null, state);
-    }
-        
     StatementVisitor(MethodState methodState, VisitorState state) {
         this.methodState = methodState;
         this.state = state;
         this.effExpVisitor = new EffExpVisitor(this.methodState, this.state);
         this.pureExpVisitor = new PureExpVisitor(this.methodState, this.state);
+        this.typeVisitor = new TypeVisitor(state::processQType);
     }
 
     @Override
@@ -86,74 +84,65 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SAss p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SFieldAss p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SDec p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SDecAss p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        arg = p.exp_.accept(expVisitor, arg);
+        int varPos = methodState.addLocalVariable(p.lident_);
+        arg.addAstore(varPos);
+        return arg;
     }
 
     @Override
     public Bytecode visit(SIf p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SIfElse p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SSuspend p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SSkip p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SAssert p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SAwait p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SThrow p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(STryCatchFinally p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override

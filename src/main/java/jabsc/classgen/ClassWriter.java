@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
@@ -84,11 +83,11 @@ final class ClassWriter implements Closeable {
 
     void setInterfaces(List<QType> interfaces, VisitorState state) {
         String[] nameArray = new String[interfaces.size() + 1];
-        nameArray[nameArray.length - 1] = StateUtil.ACTOR;
         if (! interfaces.isEmpty()) {
             interfaces.stream().map(state::processQType).map(s -> s.replace('.', '/'))
                     .collect(Collectors.toSet()).toArray(nameArray);
         }
+        nameArray[nameArray.length - 1] = StateUtil.ACTOR;
         classFile.setInterfaces(nameArray);
     }
 
@@ -98,10 +97,10 @@ final class ClassWriter implements Closeable {
      * @param body
      * @param state
      */
-    private void addField(FieldClassBody body, VisitorState state) {
+    private void addField(FieldClassBody body, TypeVisitor typeVisitor, VisitorState state) {
         StringBuilder builder = new StringBuilder();
-        body.type_.accept(new TypeVisitor(state::processQType), builder);
-        addField(body.lident_, builder.toString());
+        body.type_.accept(typeVisitor, builder);
+        addField(body.lident_, builder.append(';').toString());
     }
 
     private FieldInfo addField(String name, String type) {
@@ -110,49 +109,50 @@ final class ClassWriter implements Closeable {
         classFile.addField2(info);
         return info;
     }
-
-    private Bytecode addFields(List<FieldAssignClassBody> bodies, Bytecode code, VisitorState state) {
+    
+    private Bytecode addFields(List<FieldAssignClassBody> bodies, Bytecode code, 
+                    MethodState methodState, VisitorState state) {
         if (bodies.isEmpty()) {
             return code;
         }
 
-        PureExpVisitor visitor = new PureExpVisitor(state);
+        PureExpVisitor visitor = new PureExpVisitor(methodState, state);
         TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
         StringBuilder builder = new StringBuilder();
         bodies.forEach(b -> {
-            b.type_.accept(typeVisitor, builder);
-            addField(b.lident_, builder.toString());
             builder.setLength(0);
+            b.type_.accept(typeVisitor, builder);
+            String type = builder.append(';').toString();
+            addField(b.lident_, type);
+            code.addAload(0);
             b.pureexp_.accept(visitor, code);
+            code.addPutfield(classFile.getName(), b.lident_, type);
         });
 
         return code;
     }
 
-    private Bytecode addClassParams(List<Param> params, Bytecode code, VisitorState state) {
+    private Bytecode addClassParams(List<Param> params, Bytecode code, 
+                    MethodState methodState, VisitorState state) {
         if (params.isEmpty()) {
             return code;
         }
 
         TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
-        StringBuilder builder = new StringBuilder('L');
+        StringBuilder builder = new StringBuilder();
         params.forEach(param -> {
             param.accept((par, bcode) -> {
-                builder.setLength(1);
+                builder.setLength(0);
                 par.type_.accept(typeVisitor, builder);
-                String type = builder.toString();
+                String type = builder.append(';').toString();
                 addField(par.lident_, type);
                 bcode.addAload(0);
-                bcode.addAload(constPool.getSize());
+                bcode.addAload(methodState.getLocalVariable(par.lident_));
                 bcode.addPutfield(classFile.getName(), par.lident_, type);
                 return bcode;
             }, code);
         });
 
-        /*
-         * Params are all references
-         */
-        code.incMaxLocals(params.size());
         return code;
     }
 
@@ -171,14 +171,16 @@ final class ClassWriter implements Closeable {
         /*
          * initialise fields
          */
-        fields.forEach(f -> addField(f, state));
+        TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
+        fields.forEach(f -> addField(f, typeVisitor, state));
 
         Bytecode code = new Bytecode(constPool);
-
+        MethodState methodState = new MethodState(code, getParams(params));
+        
         /*
          * first local variable holds the reference of this.
          */
-        code.setMaxLocals(1);
+        code.incMaxLocals(1);
         code.addAload(0);
         code.addInvokespecial(StateUtil.OBJECT, MethodInfo.nameInit, "()V");
 
@@ -198,16 +200,15 @@ final class ClassWriter implements Closeable {
         /*
          * For every parameter, add and set field
          */
-        addClassParams(params, code, state);
+        addClassParams(params, code, methodState, state);
 
         /*
          * For every field assign, add and set field
          */
-        addFields(fieldAssigns, code, state);
+        addFields(fieldAssigns, code, methodState, state);
 
         if (!statements.isEmpty()) {
-            StatementVisitor statementVisitor = new StatementVisitor(state);
-            statements.stream().forEachOrdered(stmt -> stmt.accept(statementVisitor, code));
+            statements.forEach(stmt -> stmt.accept(new StatementVisitor(methodState, state), code));
         }
         /*
          * Constructor does not return any value
@@ -282,8 +283,8 @@ final class ClassWriter implements Closeable {
         /*
          * first variable points to this
          */
-        code.setMaxLocals(1);
-        StatementVisitor statementVisitor = new StatementVisitor(state);
+        code.incMaxLocals(1);
+        StatementVisitor statementVisitor = new StatementVisitor(new MethodState(code), state);
         statements.forEach(stm -> stm.accept(statementVisitor, code));
         code.addReturn(null);
         instanceMethod.setCodeAttribute(code.toCodeAttribute());
@@ -357,7 +358,13 @@ final class ClassWriter implements Closeable {
 
         classFile.addMethod2(staticMethod);
     }
-
+    
+    private String[] getParams(List<Param> params) {
+        return params.stream()
+            .map(param -> param.accept((par, v) -> par.lident_, null))
+            .toArray(i -> new String[i]);
+    }
+    
     /**
      * Adds a method for this class.
      * 
@@ -370,13 +377,7 @@ final class ClassWriter implements Closeable {
         /*
          * Capture method parameters
          */
-        List<String> params = new ArrayList<>();
-        body.listparam_.forEach(param -> param.accept((par, sb) -> {
-            params.add(par.lident_);
-            return null;
-        }, null));
-        
-        MethodState methodState = new MethodState(params.toArray(new String[params.size()]));
+        MethodState methodState = new MethodState(code, getParams(body.listparam_));
         StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
 
         body.block_.accept((bloc, v) -> {

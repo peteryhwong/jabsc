@@ -100,6 +100,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
             List<FieldAssignClassBody> fieldAssigns = new ArrayList<>();
             List<FieldClassBody> fields = new ArrayList<>();
+            List<MethClassBody> methClassBodies = new ArrayList<>();
             Stream.concat(body1.stream(), body2.stream()).forEachOrdered(
                 c -> c.accept(new ClassBody.Visitor<Void, Void>() {
 
@@ -117,12 +118,12 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
                     @Override
                     public Void visit(MethClassBody p, Void arg) {
+                        methClassBodies.add(p);
                         return null;
                     }
 
                 }, null));
 
-            body1.forEach(cb -> cb.accept(this, declWriter));
             block.accept(new MaybeBlock.Visitor<Void, ClassWriter>() {
 
                 @Override
@@ -141,7 +142,7 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
                 }
 
             }, declWriter);
-            body2.forEach(cb -> cb.accept(this, declWriter));
+            methClassBodies.forEach(cb -> cb.accept(this, declWriter));
         
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -184,16 +185,6 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
     public Void visit(ClassParamImplements klass, ClassWriter writer) {
         createClass(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
             klass.listclassbody_2, klass.listqtype_);
-        return null;
-    }
-
-    @Override
-    public Void visit(FieldAssignClassBody body, ClassWriter writer) {
-        return null;
-    }
-
-    @Override
-    public Void visit(FieldClassBody body, ClassWriter writer) {
         return null;
     }
 

@@ -151,7 +151,7 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
 
     @Override
     public Map<String, String> visit(ClassParamImplements p, Map<String, String> arg) {
-        return processClass(p.uident_, Collections.emptyList(), p.listclassbody_1, arg);
+        return processClass(p.uident_, p.listparam_, p.listclassbody_1, arg);
     }
 
     private Map<String, String> processInterface(String interfaceName, List<MethSignat> methods,
@@ -166,11 +166,23 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
 
     private Map<String, String> processClass(String name, List<Param> params,
         List<ClassBody> bodies, Map<String, String> map) {
-        String constructorName = getFullyQualifiedName(className.apply(name));
+        String constructorName = className.apply(name);
+        String fullQualifiedClassName = getFullyQualifiedName(constructorName);
         String descriptor = params.isEmpty() ? "()V" : creator.apply(null, params);
-        map.put(constructorName, descriptor);
+        map.put(new StringBuilder(fullQualifiedClassName).append('.').append(constructorName).toString(), descriptor);
 
-        StringBuilder methodPrefix = new StringBuilder(constructorName).append('.');
+        StringBuilder methodPrefix = new StringBuilder(fullQualifiedClassName).append('.');
+
+        /*
+         * constructor params become fields
+         */
+        params.forEach(param -> param.accept((par, arg) -> {
+            String fname = getFullyQualifiedName(methodPrefix, par.lident_);
+            String fdescriptor = creator.apply(par.type_, Collections.emptyList()).substring(2);
+            arg.put(fname, fdescriptor);
+            return arg;
+        }, map));
+        
         MethodBodyVisitor visitor =
             new MethodBodyVisitor(mname -> getFullyQualifiedName(methodPrefix, mname), creator);
         bodies.forEach(m -> m.accept(visitor, map));

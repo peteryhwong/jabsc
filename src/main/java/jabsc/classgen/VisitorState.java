@@ -251,6 +251,16 @@ final class VisitorState {
     ModuleInfo getModuleInfos(String moduleName) {
         return moduleInfos.get(moduleName);
     }
+    
+    String getConstructorDescriptor(String fullyQualifiedClassName) {
+        Matcher matcher = StateUtil.UNQUALIFIED_CLASSNAME.matcher(fullyQualifiedClassName);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException();
+        }
+
+        String className = matcher.group(1);
+        return getDescriptor(new StringBuilder(fullyQualifiedClassName).append('/').append(className).toString());
+    }
 
     String getDescriptor(String fullyQualifiedName) {
         Matcher matcher = StateUtil.MODULE_NAME.matcher(fullyQualifiedName);
@@ -265,9 +275,7 @@ final class VisitorState {
         }
 
         ModuleInfo module = moduleInfos.get(modules.get(moduleName));
-
-        String declaration = fullyQualifiedName.substring(moduleName.length() + 1);
-        String signature = module.nameToSignature.get(declaration);
+        String signature = module.nameToSignature.get(fullyQualifiedName.replace('/', '.'));
         if (signature == null) {
             throw new IllegalArgumentException();
         }
@@ -307,6 +315,11 @@ final class VisitorState {
                  * Module name
                  */
                 info.name = m.qtype_.accept(qtypeVisitor, Boolean.FALSE);
+                
+                /*
+                 * TODO we need to make module name to lower case as it maps to package names
+                 */
+                info.name = info.name.toLowerCase();
                 modules.put(info.name, m);
 
                 Consumer<String> consumeDecl = info.exports::add;

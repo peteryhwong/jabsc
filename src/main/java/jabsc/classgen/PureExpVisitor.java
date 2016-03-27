@@ -51,10 +51,6 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
     private final LiteralVisitor literalVisitor;
     private final ModuleInfo currentModule;
 
-    PureExpVisitor(VisitorState state) {
-        this(null, state);
-    }
-        
     PureExpVisitor(MethodState methodState, VisitorState state) {
         this.methodState = methodState;
         this.state = state;
@@ -314,55 +310,48 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EQualFunCall p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(ENaryFunCall p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(ENaryQualFunCall p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(EVar p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(EThis p, Bytecode arg) {
         //load this
         arg.addAload(0);
-        String className = state.getRefinedClassName(arg.getConstPool().getClassName());
+        String className = arg.getConstPool().getClassName();
         String fullyQualifiedName = className + "." + p.lident_;
-        String type = state.getDescriptor(fullyQualifiedName);
+        String type = currentModule.getNameToSignature().get(fullyQualifiedName);
         arg.addGetfield(className, p.lident_, type);
         return arg;
     }
 
     @Override
     public Bytecode visit(EQualVar p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(ESinglConstr p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(EParamConstr p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -372,20 +361,17 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(Let p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(If p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(Case p, Bytecode arg) {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException();
     }
 
 }
