@@ -65,6 +65,7 @@ final class StateUtil {
     static final String VOID_PRIMITIVE_NAME = "void";
     static final String LITERAL_THIS = "this";
     static final String LITERAL_NULL = "null";
+    static final String LITERAL_GET = "get";
     static final String FUNCTIONS_CLASS_NAME = "Functions";
     static final String MAIN_CLASS_NAME = "Main";
     static final String COMMA_SPACE = ", ";
@@ -80,6 +81,18 @@ final class StateUtil {
 
     static Predicate<Decl> isTheSameTopLevelDeclIdentifier(String className) {
         return decl -> className.equals(getTopLevelDeclIdentifier(decl));
+    }
+    
+    static int argumentCounts(String descriptor) {
+        int start = descriptor.indexOf('(');
+        int end = descriptor.indexOf(')');
+        int argument = 0;
+        for (int index = start; index < end; index++) {
+            if (descriptor.charAt(index) == ';') {
+                argument++;
+            }
+        }
+        return argument;
     }
 
     static String getTopLevelDeclIdentifier(Decl decl) {

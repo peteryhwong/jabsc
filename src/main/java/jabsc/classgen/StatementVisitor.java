@@ -21,6 +21,7 @@ import bnfc.abs.Absyn.SThrow;
 import bnfc.abs.Absyn.STryCatchFinally;
 import bnfc.abs.Absyn.SWhile;
 import bnfc.abs.Absyn.Stm;
+import jabsc.classgen.VisitorState.ModuleInfo;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.Opcode;
 
@@ -31,6 +32,7 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     private final EffExpVisitor effExpVisitor;
     private final PureExpVisitor pureExpVisitor;
     private final TypeVisitor typeVisitor;
+    private final ModuleInfo currentModule;
 
     private final Exp.Visitor<Bytecode, Bytecode> expVisitor =
         new Exp.Visitor<Bytecode, Bytecode>() {
@@ -50,6 +52,7 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     StatementVisitor(MethodState methodState, VisitorState state) {
         this.methodState = methodState;
         this.state = state;
+        this.currentModule = state.getCurrentModule();
         this.effExpVisitor = new EffExpVisitor(this.methodState, this.state);
         this.pureExpVisitor = new PureExpVisitor(this.methodState, this.state);
         this.typeVisitor = new TypeVisitor(state::processQType);
@@ -68,16 +71,12 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SWhile p, Bytecode arg) {        
-        p.pureexp_.accept(pureExpVisitor, arg);
-        Bytecode subCode = p.stm_.accept(this, ByteCodeUtil.newByteCode(arg));
-        ByteCodeUtil.addBranch(arg, Opcode.GOTO, 0);
-        return arg;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Bytecode visit(SReturn p, Bytecode arg) {
-        Bytecode bt = p.exp_.accept(expVisitor, ByteCodeUtil.newByteCode(arg));
-        arg = ByteCodeUtil.add(bt, arg);
+        arg = p.exp_.accept(expVisitor, arg);
         arg.addOpcode(Opcode.ARETURN);
         return arg;
     }
@@ -89,7 +88,13 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SFieldAss p, Bytecode arg) {
-        throw new UnsupportedOperationException();
+        arg.addAload(0);
+        arg = p.exp_.accept(expVisitor, arg);
+        String className = arg.getConstPool().getClassName();
+        String fullyQualifiedName = className + "." + p.lident_;
+        String type = currentModule.getNameToSignature().get(fullyQualifiedName);
+        arg.addPutfield(className, p.lident_, type);
+        return arg;
     }
 
     @Override
@@ -100,7 +105,8 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     @Override
     public Bytecode visit(SDecAss p, Bytecode arg) {
         arg = p.exp_.accept(expVisitor, arg);
-        int varPos = methodState.addLocalVariable(p.lident_);
+        String type = p.type_.accept(typeVisitor, new StringBuilder()).toString();
+        int varPos = methodState.addLocalVariable(p.lident_, type);
         arg.addAstore(varPos);
         return arg;
     }

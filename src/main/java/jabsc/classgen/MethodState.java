@@ -1,10 +1,11 @@
 package jabsc.classgen;
 
 
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.IntConsumer;
 
 import gnu.trove.map.TObjectIntMap;
-import javassist.bytecode.Bytecode;
 
 final class MethodState {
 
@@ -15,36 +16,53 @@ final class MethodState {
      */
     private final TObjectIntMap<String> locals = TCollectionUtil.createObjectIntMap();
     
-    private final Bytecode code;
+    /**
+     * Types
+     */
+    private final Map<String, String> types = new HashMap<>();
+    
+    private final IntConsumer maxLocalConsumer;
+    
+    private final String className;
     
     /**
      * The initial index for local variables.
      */
     private int currentIndex = 0;
     
-    MethodState(Bytecode code, String... param) {
-        this.code = code;
-        addLocalVariable(THIS);
-        Arrays.stream(param).forEach(this::addLocalVariable);
+    MethodState(IntConsumer maxLocalConsumer, String className, Map<String, String> params) {
+        this.maxLocalConsumer = maxLocalConsumer;
+        this.className = className;
+        addLocalVariable(THIS, null);
+        params.forEach(this::addLocalVariable);
+    }
+    
+    String getClassName() {
+        return className;
     }
 
-    int addLocalVariable(String variableName) {
-        return addLocalVariable(variableName, 1);
+    int addLocalVariable(String variableName, String type) {
+        return addLocalVariable(variableName, type, 1);
     }
 
-    int addLocalVariable(String variableName, int size) {
+    int addLocalVariable(String variableName, String type, int size) {
         int index = getLocalVariable(variableName);
         if (index == TCollectionUtil.DEFAULT_NO_ENTRY_VALUE) {
             locals.put(variableName, currentIndex);
+            types.put(variableName, type);
             index = currentIndex;
             currentIndex += size;
-            code.incMaxLocals(size);
+            maxLocalConsumer.accept(size);
         }
         return index;
     }
 
     int getLocalVariable(String variableName) {
         return locals.get(variableName);
+    }
+
+    String getLocalVariableType(String variableName) {
+        return types.get(variableName);
     }
 
 }

@@ -6,7 +6,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -175,7 +177,7 @@ final class ClassWriter implements Closeable {
         fields.forEach(f -> addField(f, typeVisitor, state));
 
         Bytecode code = new Bytecode(constPool);
-        MethodState methodState = new MethodState(code, getParams(params));
+        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), getParams(typeVisitor, params));
         
         /*
          * first local variable holds the reference of this.
@@ -284,7 +286,8 @@ final class ClassWriter implements Closeable {
          * first variable points to this
          */
         code.incMaxLocals(1);
-        StatementVisitor statementVisitor = new StatementVisitor(new MethodState(code), state);
+        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), Collections.emptyMap());
+        StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
         statements.forEach(stm -> stm.accept(statementVisitor, code));
         code.addReturn(null);
         instanceMethod.setCodeAttribute(code.toCodeAttribute());
@@ -359,10 +362,9 @@ final class ClassWriter implements Closeable {
         classFile.addMethod2(staticMethod);
     }
     
-    private String[] getParams(List<Param> params) {
-        return params.stream()
-            .map(param -> param.accept((par, v) -> par.lident_, null))
-            .toArray(i -> new String[i]);
+    private Map<String, String> getParams(TypeVisitor typeVisitor, List<Param> params) {
+        return params.stream().collect(Collectors.toMap(param -> param.accept((par, v) -> par.lident_, null), 
+                    param -> param.accept((par, v) -> par.type_.accept(typeVisitor, new StringBuilder()).toString(), null)));            
     }
     
     /**
@@ -377,7 +379,8 @@ final class ClassWriter implements Closeable {
         /*
          * Capture method parameters
          */
-        MethodState methodState = new MethodState(code, getParams(body.listparam_));
+        TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
+        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), getParams(typeVisitor, body.listparam_));
         StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
 
         body.block_.accept((bloc, v) -> {

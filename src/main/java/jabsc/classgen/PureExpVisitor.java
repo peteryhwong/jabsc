@@ -325,7 +325,8 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(EVar p, Bytecode arg) {
-        throw new UnsupportedOperationException();
+        arg.addAload(methodState.getLocalVariable(p.lident_));
+        return arg;
     }
 
     @Override

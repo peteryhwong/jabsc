@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<String, String>> {
 
@@ -136,22 +137,34 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
 
     @Override
     public Map<String, String> visit(ClassDecl p, Map<String, String> arg) {
-        return processClass(p.uident_, Collections.emptyList(), p.listclassbody_1, arg);
+        return processClass(p.uident_, 
+                        Collections.emptyList(), 
+                        Stream.concat(p.listclassbody_1.stream(), p.listclassbody_2.stream()), 
+                        arg);
     }
 
     @Override
     public Map<String, String> visit(ClassParamDecl p, Map<String, String> arg) {
-        return processClass(p.uident_, p.listparam_, p.listclassbody_1, arg);
+        return processClass(p.uident_, 
+                        p.listparam_, 
+                        Stream.concat(p.listclassbody_1.stream(), p.listclassbody_2.stream()), 
+                        arg);
     }
 
     @Override
     public Map<String, String> visit(ClassImplements p, Map<String, String> arg) {
-        return processClass(p.uident_, Collections.emptyList(), p.listclassbody_1, arg);
+        return processClass(p.uident_, 
+                        Collections.emptyList(), 
+                        Stream.concat(p.listclassbody_1.stream(), p.listclassbody_2.stream()), 
+                        arg);
     }
 
     @Override
     public Map<String, String> visit(ClassParamImplements p, Map<String, String> arg) {
-        return processClass(p.uident_, p.listparam_, p.listclassbody_1, arg);
+        return processClass(p.uident_, 
+                        p.listparam_, 
+                        Stream.concat(p.listclassbody_1.stream(), p.listclassbody_2.stream()), 
+                        arg);
     }
 
     private Map<String, String> processInterface(String interfaceName, List<MethSignat> methods,
@@ -165,7 +178,7 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
     }
 
     private Map<String, String> processClass(String name, List<Param> params,
-        List<ClassBody> bodies, Map<String, String> map) {
+        Stream<ClassBody> bodies, Map<String, String> map) {
         String constructorName = className.apply(name);
         String fullQualifiedClassName = getFullyQualifiedName(constructorName);
         String descriptor = params.isEmpty() ? "()V" : creator.apply(null, params);
@@ -185,7 +198,7 @@ final class DescriptorVisitor extends AbstractVisitor<Map<String, String>, Map<S
         
         MethodBodyVisitor visitor =
             new MethodBodyVisitor(mname -> getFullyQualifiedName(methodPrefix, mname), creator);
-        bodies.forEach(m -> m.accept(visitor, map));
+        bodies.forEachOrdered(m -> m.accept(visitor, map));
         return map;
     }
 
