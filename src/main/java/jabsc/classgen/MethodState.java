@@ -25,20 +25,28 @@ final class MethodState {
     
     private final String className;
     
+    private final BootstrapMethodManager counter;
+    
     /**
      * The initial index for local variables.
      */
     private int currentIndex = 0;
     
-    MethodState(IntConsumer maxLocalConsumer, String className, Map<String, String> params) {
+    MethodState(IntConsumer maxLocalConsumer, BootstrapMethodManager counter, 
+                    String className, Map<String, String> params) {
         this.maxLocalConsumer = maxLocalConsumer;
         this.className = className;
+        this.counter = counter;
         addLocalVariable(THIS, null);
         params.forEach(this::addLocalVariable);
     }
     
     String getClassName() {
         return className;
+    }
+    
+    BootstrapMethodManager getCounter() {
+        return counter;
     }
 
     int addLocalVariable(String variableName, String type) {
@@ -47,7 +55,7 @@ final class MethodState {
 
     int addLocalVariable(String variableName, String type, int size) {
         int index = getLocalVariable(variableName);
-        if (index == TCollectionUtil.DEFAULT_NO_ENTRY_VALUE) {
+        if (index == TCollectionUtil.DEFAULT_NO_ENTRY_KEY_VALUE) {
             locals.put(variableName, currentIndex);
             types.put(variableName, type);
             index = currentIndex;

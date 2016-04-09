@@ -41,8 +41,8 @@ final class LiteralVisitor implements Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(LInt p, Bytecode arg) {
-        arg.addLconst(p.integer_.longValue());
-        return ByteCodeUtil.toLong(arg);
+        arg.addIconst(p.integer_.intValue());
+        return ByteCodeUtil.toInteger(arg);
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -21,6 +22,8 @@ import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.Stm;
 import bnfc.abs.Absyn.Type;
 import javassist.bytecode.AccessFlag;
+import javassist.bytecode.BootstrapMethodsAttribute;
+import javassist.bytecode.BootstrapMethodsAttribute.BootstrapMethod;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.ClassFile;
 import javassist.bytecode.ConstPool;
@@ -35,6 +38,7 @@ final class ClassWriter implements Closeable {
         ABSTRACT, CONCRETE, CONSTRUCTOR, STATIC
     }
 
+    private final BootstrapMethodManager bootStrapMethodManager = new BootstrapMethodManager();
     private final Path outputDirectory;
     private final ClassFile classFile;
     private final ConstPool constPool;
@@ -52,9 +56,17 @@ final class ClassWriter implements Closeable {
         }
         return matcher.group(1);
     }
+    
+    private void finaliseClass() {
+        Set<BootstrapMethod> methods = bootStrapMethodManager.getBootstrapMethods();
+        BootstrapMethod[] methodArray = methods.toArray(new BootstrapMethod[methods.size()]);
+        classFile.addAttribute(new BootstrapMethodsAttribute(constPool, methodArray));
+        bootStrapMethodManager.getLambdaMethods().forEach(classFile::addMethod2);
+    }
 
     @Override
     public void close() throws IOException {
+        finaliseClass();
         outputDirectory.toFile().mkdirs();
         Path path = outputDirectory.resolve(getUnqualifiedName(classFile) + ".class");
         File file = path.toFile();
@@ -177,7 +189,8 @@ final class ClassWriter implements Closeable {
         fields.forEach(f -> addField(f, typeVisitor, state));
 
         Bytecode code = new Bytecode(constPool);
-        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), getParams(typeVisitor, params));
+        MethodState methodState = new MethodState(code::incMaxLocals, bootStrapMethodManager,
+                        constPool.getClassName(), getParams(typeVisitor, params));
         
         /*
          * first local variable holds the reference of this.
@@ -286,7 +299,8 @@ final class ClassWriter implements Closeable {
          * first variable points to this
          */
         code.incMaxLocals(1);
-        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), Collections.emptyMap());
+        MethodState methodState = new MethodState(code::incMaxLocals, bootStrapMethodManager,
+                        constPool.getClassName(), Collections.emptyMap());
         StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
         statements.forEach(stm -> stm.accept(statementVisitor, code));
         code.addReturn(null);
@@ -380,7 +394,8 @@ final class ClassWriter implements Closeable {
          * Capture method parameters
          */
         TypeVisitor typeVisitor = new TypeVisitor(state::processQType);
-        MethodState methodState = new MethodState(code::incMaxLocals, constPool.getClassName(), getParams(typeVisitor, body.listparam_));
+        MethodState methodState = new MethodState(code::incMaxLocals, bootStrapMethodManager,
+                        constPool.getClassName(), getParams(typeVisitor, body.listparam_));
         StatementVisitor statementVisitor = new StatementVisitor(methodState, state);
 
         body.block_.accept((bloc, v) -> {

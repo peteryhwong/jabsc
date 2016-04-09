@@ -150,7 +150,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         arg.add(-1, -1);
 
         // fall through value
-        arg.addOpcode(Opcode.ICONST_1);
+        arg.addIconst(1);
         arg.add(Opcode.GOTO);
         // 2 byte place holders for offset
         int offsetIndexEnd = arg.currentPc();
@@ -158,7 +158,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
         // branch value
         int endOffset = arg.currentPc();
-        arg.addOpcode(Opcode.ICONST_0);
+        arg.addIconst(0);
 
         // Update offsets
         arg.write16bit(offsetIndex, endOffset - offsetIndex + 1);
@@ -184,19 +184,16 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         return negEquals(arg);
     }
     
-    private Bytecode longComparison(PureExp lhs, PureExp rhs, int cmpOp, Bytecode arg) {
+    private Bytecode intComparison(PureExp lhs, PureExp rhs, int cmpOp, Bytecode arg) {
         // Evaluate lhs
         arg = lhs.accept(this, arg);
-        arg = ByteCodeUtil.toLongValue(arg);
+        arg = ByteCodeUtil.toIntegerValue(arg);
 
         // Evaluate rhs
         arg = rhs.accept(this, arg);
-        arg = ByteCodeUtil.toLongValue(arg);
+        arg = ByteCodeUtil.toIntegerValue(arg);
         
-        // Compare two values
-        arg.addOpcode(Opcode.LCMP);
-
-        // branch to endOffset if operation is true
+        // Compare two values and branch to endOffset if true
         arg.addOpcode(cmpOp);
         // 2 byte place holders for offset
         int offsetIndex = arg.currentPc();
@@ -218,59 +215,59 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
         arg.write16bit(offsetIndexEnd, arg.currentPc() - offsetIndexEnd + 1);
         return ByteCodeUtil.toBoolean(arg);
     }
-
+    
     @Override
     public Bytecode visit(ELt p, Bytecode arg) {
-        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFLT, arg);
+        return intComparison(p.pureexp_1, p.pureexp_2, Opcode.IF_ICMPLT, arg);
     }
 
     @Override
     public Bytecode visit(ELe p, Bytecode arg) {
-        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFLE, arg);
+        return intComparison(p.pureexp_1, p.pureexp_2, Opcode.IF_ICMPLE, arg);
     }
 
     @Override
     public Bytecode visit(EGt p, Bytecode arg) {
-        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFGT, arg);
+        return intComparison(p.pureexp_1, p.pureexp_2, Opcode.IF_ICMPGT, arg);
     }
 
     @Override
     public Bytecode visit(EGe p, Bytecode arg) {
-        return longComparison(p.pureexp_1, p.pureexp_2, Opcode.IFGE, arg);
+        return intComparison(p.pureexp_1, p.pureexp_2, Opcode.IF_ICMPGE, arg);
     }
 
     private Bytecode arithmetic(PureExp lhs, PureExp rhs, int operation, Bytecode arg) {
         arg = lhs.accept(this, arg);
-        arg = ByteCodeUtil.toLongValue(arg);
+        arg = ByteCodeUtil.toIntegerValue(arg);
         arg = rhs.accept(this, arg);
-        arg = ByteCodeUtil.toLongValue(arg);
+        arg = ByteCodeUtil.toIntegerValue(arg);
         arg.addOpcode(operation);
-        return ByteCodeUtil.toLong(arg);
+        return ByteCodeUtil.toInteger(arg);
     }
     
     @Override
     public Bytecode visit(EAdd p, Bytecode arg) {
-        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LADD, arg);
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.IADD, arg);
     }
 
     @Override
     public Bytecode visit(ESub p, Bytecode arg) {
-        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LSUB, arg);
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.ISUB, arg);
     }
 
     @Override
     public Bytecode visit(EMul p, Bytecode arg) {
-        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LMUL, arg);
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.IMUL, arg);
     }
 
     @Override
     public Bytecode visit(EDiv p, Bytecode arg) {
-        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LDIV, arg);
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.IDIV, arg);
     }
 
     @Override
     public Bytecode visit(EMod p, Bytecode arg) {
-        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.LREM, arg);
+        return arithmetic(p.pureexp_1, p.pureexp_2, Opcode.IREM, arg);
     }
 
     @Override
@@ -283,9 +280,9 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
     @Override
     public Bytecode visit(EIntNeg p, Bytecode arg) {
         arg = p.pureexp_.accept(this, arg);
-        arg = ByteCodeUtil.toLongValue(arg);
-        arg.addOpcode(Opcode.LNEG);
-        return ByteCodeUtil.toLong(arg);
+        arg = ByteCodeUtil.toIntegerValue(arg);
+        arg.addOpcode(Opcode.INEG);
+        return ByteCodeUtil.toInteger(arg);
     }
 
     @Override

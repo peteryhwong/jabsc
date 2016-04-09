@@ -40,7 +40,7 @@ final class StateUtil {
         Map<String, String> map = new HashMap<>();
         map.put("Unit", "V");
         map.put("String", "Ljava/lang/String");
-        map.put("Int", "Ljava/lang/Long");
+        map.put("Int", "Ljava/lang/Integer");
         map.put("Rat", "Ljava/lang/Double");
         map.put("Bool", "Ljava/lang/Boolean");
         ABS_TO_JDK = s -> { 
