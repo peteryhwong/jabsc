@@ -9,6 +9,7 @@ import bnfc.abs.Absyn.ClassParamImplements;
 import bnfc.abs.Absyn.DataDecl;
 import bnfc.abs.Absyn.DataParDecl;
 import bnfc.abs.Absyn.Decl;
+import bnfc.abs.Absyn.Decl.Visitor;
 import bnfc.abs.Absyn.ExtendsDecl;
 import bnfc.abs.Absyn.FunDecl;
 import bnfc.abs.Absyn.FunParDecl;
@@ -38,6 +39,7 @@ final class StateUtil {
     static final Set<String> BUILT_IN_ABS;
     static {
         Map<String, String> map = new HashMap<>();
+        map.put("Fut", "Labs/api/Response;");
         map.put("Unit", "V");
         map.put("String", "Ljava/lang/String");
         map.put("Int", "Ljava/lang/Integer");
@@ -78,6 +80,8 @@ final class StateUtil {
                 Actor.class.getPackage().getName() + ".*"};
     static final String[] DEFAULT_STATIC_IMPORTS = new String[] {Functional.class.getPackage()
         .getName() + "." + Functional.class.getSimpleName() + ".*"};
+    
+    static final Visitor<String, Void> DECL_NAME_VISITOR = new DeclNameVisitor();
 
     static Predicate<Decl> isTheSameTopLevelDeclIdentifier(String className) {
         return decl -> className.equals(getTopLevelDeclIdentifier(decl));
@@ -96,37 +100,7 @@ final class StateUtil {
     }
 
     static String getTopLevelDeclIdentifier(Decl decl) {
-        if (decl instanceof ClassDecl) {
-            return ((ClassDecl) decl).uident_;
-        }
-        if (decl instanceof ClassImplements) {
-            return ((ClassImplements) decl).uident_;
-        }
-        if (decl instanceof ClassParamDecl) {
-            return ((ClassParamDecl) decl).uident_;
-        }
-        if (decl instanceof ClassParamImplements) {
-            return ((ClassParamImplements) decl).uident_;
-        }
-        if (decl instanceof ExtendsDecl) {
-            return ((ExtendsDecl) decl).uident_;
-        }
-        if (decl instanceof InterfDecl) {
-            return ((InterfDecl) decl).uident_;
-        }
-        if (decl instanceof FunDecl) {
-            return ((FunDecl) decl).lident_;
-        }
-        if (decl instanceof DataDecl) {
-            return ((DataDecl) decl).uident_;
-        }
-        if (decl instanceof DataParDecl) {
-            return ((DataParDecl) decl).uident_;
-        }
-        if (decl == null) {
-            return MAIN_CLASS_NAME;
-        }
-        throw new IllegalArgumentException("Unknown top level type: " + decl);
+        return decl.accept(DECL_NAME_VISITOR, null);
     }
 
     static boolean isAbsInterfaceDecl(Decl decl) {

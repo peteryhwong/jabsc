@@ -1,5 +1,7 @@
 package jabsc.classgen;
 
+import java.util.UUID;
+
 import bnfc.abs.Absyn.Exp;
 import bnfc.abs.Absyn.ExpE;
 import bnfc.abs.Absyn.ExpP;
@@ -21,8 +23,10 @@ import bnfc.abs.Absyn.SThrow;
 import bnfc.abs.Absyn.STryCatchFinally;
 import bnfc.abs.Absyn.SWhile;
 import bnfc.abs.Absyn.Stm;
+import jabsc.classgen.BootstrapMethodManager.InterfaceCall;
 import jabsc.classgen.VisitorState.ModuleInfo;
 import javassist.bytecode.Bytecode;
+import javassist.bytecode.ConstPool;
 import javassist.bytecode.Opcode;
 
 final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
@@ -31,6 +35,9 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     private final VisitorState state;
     private final EffExpVisitor effExpVisitor;
     private final PureExpVisitor pureExpVisitor;
+    private final GuardVisitor guardVisitor;
+    private final GuardNameVisitor guardNameVisitor;
+    private final GuardTypeVisitor guardTypeVisitor;
     private final TypeVisitor typeVisitor;
     private final ModuleInfo currentModule;
 
@@ -52,10 +59,13 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     StatementVisitor(MethodState methodState, VisitorState state) {
         this.methodState = methodState;
         this.state = state;
-        this.currentModule = state.getCurrentModule();
+        this.currentModule = this.state.getCurrentModule();
         this.effExpVisitor = new EffExpVisitor(this.methodState, this.state);
         this.pureExpVisitor = new PureExpVisitor(this.methodState, this.state);
-        this.typeVisitor = new TypeVisitor(state::processQType);
+        this.typeVisitor = new TypeVisitor(this.state::processQType);
+        this.guardVisitor = new GuardVisitor(this.methodState, this.state);
+        this.guardTypeVisitor = new GuardTypeVisitor(this.methodState, this.currentModule);
+        this.guardNameVisitor = new GuardNameVisitor();
     }
 
     @Override
@@ -106,8 +116,7 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
     public Bytecode visit(SDecAss p, Bytecode arg) {
         arg = p.exp_.accept(expVisitor, arg);
         String type = p.type_.accept(typeVisitor, new StringBuilder()).toString();
-        int varPos = methodState.addLocalVariable(p.lident_, type);
-        arg.addAstore(varPos);
+        arg.addAstore(methodState.addLocalVariable(p.lident_, type));
         return arg;
     }
 
@@ -138,7 +147,41 @@ final class StatementVisitor implements Stm.Visitor<Bytecode, Bytecode> {
 
     @Override
     public Bytecode visit(SAwait p, Bytecode arg) {
-        throw new UnsupportedOperationException();
+        arg = p.guard_.accept(guardVisitor, arg);
+        String type = p.guard_.accept(guardTypeVisitor, new StringBuilder()).toString();
+
+        if (! "Labs/api/Response;".equals(type)) {
+            throw new IllegalArgumentException();
+        }
+        
+        /*
+         * create a Supplier lambda
+         */
+        ConstPool constPool = arg.getConstPool();
+        BootstrapMethodManager counter = methodState.getCounter();
+        InterfaceCall interfaceCall = new InterfaceCall("abs/api/Response", "getValue", "()Ljava/lang/Boolean;", 1);
+        int bootstrap = counter.addBootstrapMethod(constPool, interfaceCall, BootstrapMethodManager.SUPPLIER);
+        
+        /*
+         * e.g. InvokeDynamic #1:get:(Labs/api/Response;)Ljava/util/function/Supplier;
+         */
+        arg.addInvokedynamic(bootstrap, "get", "(Labs/api/Response;)Ljava/util/function/Supplier;");
+        
+        /*
+         * Save to local variable
+         */
+        String supplierName = "msg" + UUID.randomUUID().toString();
+        arg.addAstore(methodState.addLocalVariable(supplierName, "Ljava/util/function/Supplier;"));
+        
+        /*
+         * await:(Ljava/lang/Object;Ljava/util/function/Supplier;)LResponse;
+         */
+        arg.addAload(0);
+        arg.addAload(0);
+        arg.addAload(methodState.getLocalVariable(supplierName));
+        arg.addInvokevirtual(constPool.getClassName(), "await", "(Ljava/lang/Object;Ljava/util/function/Supplier;)Labs/api/Response;");
+        
+        return arg;
     }
 
     @Override

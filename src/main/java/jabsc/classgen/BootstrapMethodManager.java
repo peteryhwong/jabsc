@@ -5,8 +5,10 @@ import java.util.Set;
 import java.util.function.BiFunction;
 
 import javassist.bytecode.BootstrapMethodsAttribute.BootstrapMethod;
+import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
 import javassist.bytecode.ConstPool;
+import javassist.bytecode.ExceptionsAttribute;
 import javassist.bytecode.MethodInfo;
 import javassist.bytecode.Opcode;
 
@@ -65,6 +67,7 @@ final class BootstrapMethodManager {
         /*
          * Invoke the actual method call
          */
+        code.addAload(0);
         code.addInvokeinterface("abs/api/Response", "getValue", "()Ljava/lang/Object;", 1);
         
         code.addOpcode(Opcode.IFNULL);
@@ -122,6 +125,16 @@ final class BootstrapMethodManager {
         int reference_index = constPool.addMethodrefInfo(classNameIndex, methodName, methodDescriptor);
         return constPool.addMethodHandleInfo(ConstPool.REF_invokeStatic, reference_index);
     }
+    
+    private MethodInfo buildLambdaMethod(ConstPool cp, String className, String desc, Bytecode bytecode) {
+        MethodInfo info = new MethodInfo(cp, className, desc);
+        info.setAccessFlags(AccessFlag.SYNTHETIC | AccessFlag.STATIC | AccessFlag.PRIVATE);
+        info.setCodeAttribute(bytecode.toCodeAttribute());
+        ExceptionsAttribute exceptionsAttribute = new ExceptionsAttribute(cp);
+        exceptionsAttribute.setExceptions(new String[] {"java/lang/Exception"});
+        info.setExceptionsAttribute(exceptionsAttribute);
+        return info;
+    }
 
     int addBootstrapMethod(ConstPool constPool, InterfaceCall interfaceCall, 
                     BiFunction<ConstPool, InterfaceCall, Bytecode> lambdaProducer) {
@@ -131,13 +144,14 @@ final class BootstrapMethodManager {
         /*
          * lambda$main$n where n is the bootstrap index
          */
-        String lambdaName = ByteCodeUtil.getLambdaClassName(bootstrap);
+        StringBuilder stringBuilder = new StringBuilder();
+        String lambdaName = stringBuilder.append("lambda$main$").append(bootstrap).toString();
         
         /*
          * The signature and return type that should be enforced dynamically at invocation time.
          * This is a specialization of ()Ljava/lang/Object;.
          */
-        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.setLength(0);
         String returnType = stringBuilder.append("()")
                         .append(interfaceCall.descriptor.substring(interfaceCall.descriptor.indexOf(')') + 1))
                         .toString();
@@ -178,7 +192,7 @@ final class BootstrapMethodManager {
          * lambdaMethod
          */
         Bytecode code = lambdaProducer.apply(constPool, interfaceCall);
-        lambdaMethods.add(ByteCodeUtil.buildLambdaMethod(constPool, lambdaName, lambdaDecriptor, code));   
+        lambdaMethods.add(buildLambdaMethod(constPool, lambdaName, lambdaDecriptor, code));   
         
         return bootstrap;
     }

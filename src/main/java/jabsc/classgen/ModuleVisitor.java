@@ -1,14 +1,27 @@
 package jabsc.classgen;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Stream;
+
+import javax.lang.model.element.ElementKind;
+
 import bnfc.abs.AbstractVisitor;
 import bnfc.abs.Absyn.ClassBody;
 import bnfc.abs.Absyn.ClassDecl;
 import bnfc.abs.Absyn.ClassImplements;
 import bnfc.abs.Absyn.ClassParamDecl;
 import bnfc.abs.Absyn.ClassParamImplements;
+import bnfc.abs.Absyn.DataDecl;
+import bnfc.abs.Absyn.DataParDecl;
+import bnfc.abs.Absyn.ExceptionDecl;
 import bnfc.abs.Absyn.ExtendsDecl;
 import bnfc.abs.Absyn.FieldAssignClassBody;
 import bnfc.abs.Absyn.FieldClassBody;
+import bnfc.abs.Absyn.FunDecl;
+import bnfc.abs.Absyn.FunParDecl;
 import bnfc.abs.Absyn.InterfDecl;
 import bnfc.abs.Absyn.JustBlock;
 import bnfc.abs.Absyn.MaybeBlock;
@@ -20,14 +33,8 @@ import bnfc.abs.Absyn.NoBlock;
 import bnfc.abs.Absyn.Param;
 import bnfc.abs.Absyn.QType;
 import bnfc.abs.Absyn.Stm;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Stream;
-
-import javax.lang.model.element.ElementKind;
+import bnfc.abs.Absyn.TypeDecl;
+import bnfc.abs.Absyn.TypeParDecl;
 
 final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
 
@@ -186,6 +193,36 @@ final class ModuleVisitor extends AbstractVisitor<Void, ClassWriter> {
         createClass(klass.uident_, klass.listparam_, klass.listclassbody_1, klass.maybeblock_,
             klass.listclassbody_2, klass.listqtype_);
         return null;
+    }
+
+    @Override
+    public Void visit(TypeDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Void visit(TypeParDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Void visit(DataDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Void visit(DataParDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Void visit(FunDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Void visit(FunParDecl p, ClassWriter arg) {
+        throw new UnsupportedOperationException();
     }
 
 }

@@ -121,11 +121,11 @@ final class EffExpVisitor implements Visitor<Bytecode, Bytecode> {
          * Save to local variable
          */
         String callableName = "msg" + UUID.randomUUID().toString();
-        arg.addAstore(methodState.addLocalVariable(callableName, "Ljava/util/concurrent/Callable"));
+        arg.addAstore(methodState.addLocalVariable(callableName, "Ljava/util/concurrent/Callable;"));
         
         /*
          * send message
-         * calls send:(Ljava/lang/Object;Ljava/lang/Object;)LResponse;
+         * calls send:(Ljava/lang/Object;Ljava/lang/Object;)Labs/api/Response;
          */
         arg.addAload(0);
         p.pureexp_.accept(pureExpVisitor, arg);

@@ -44,6 +44,7 @@ final class PureExpVisitor implements Visitor<Bytecode, Bytecode> {
 
     static {
         FUNCTIONALS.put("toString", "(Ljava/lang/Object;)Ljava/lang/String;");
+        FUNCTIONALS.put("intToString", "(Ljava/lang/Integer;)Ljava/lang/String;");
     }
 
     private final MethodState methodState;

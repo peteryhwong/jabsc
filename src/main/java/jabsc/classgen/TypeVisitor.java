@@ -13,8 +13,9 @@ final class TypeVisitor implements Type.Visitor<StringBuilder, StringBuilder> {
     private final Function<QType, String> processQType;
 
     TypeVisitor(Function<QType, String> processQType) {
-        this.processQType =
-            processQType.andThen(s -> s.replace('.', '/')).andThen(StateUtil.ABS_TO_JDK);
+        this.processQType = processQType
+                .andThen(s -> s.replace('.', '/'))
+                .andThen(StateUtil.ABS_TO_JDK);
     }
 
     @Override
@@ -29,7 +30,7 @@ final class TypeVisitor implements Type.Visitor<StringBuilder, StringBuilder> {
 
     @Override
     public StringBuilder visit(TGen p, StringBuilder arg) {
-        throw new UnsupportedOperationException();
+        return arg.append(processQType.apply(p.qtype_));     
     }
 
 }

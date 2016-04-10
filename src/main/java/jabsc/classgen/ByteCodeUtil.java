@@ -2,11 +2,7 @@ package jabsc.classgen;
 
 import gnu.trove.TIntCollection;
 import gnu.trove.set.hash.TIntHashSet;
-import javassist.bytecode.AccessFlag;
 import javassist.bytecode.Bytecode;
-import javassist.bytecode.ConstPool;
-import javassist.bytecode.ExceptionsAttribute;
-import javassist.bytecode.MethodInfo;
 import javassist.bytecode.Opcode;
 
 final class ByteCodeUtil {
@@ -176,32 +172,4 @@ final class ByteCodeUtil {
         return arg;
     }
     
-    static MethodInfo buildLambdaMethod(ConstPool cp, String className, String desc, Bytecode bytecode) {
-        MethodInfo info = new MethodInfo(cp, className, desc);
-        info.setAccessFlags(AccessFlag.SYNTHETIC | AccessFlag.STATIC | AccessFlag.PRIVATE);
-        info.setCodeAttribute(bytecode.toCodeAttribute());
-        ExceptionsAttribute exceptionsAttribute = new ExceptionsAttribute(cp);
-        exceptionsAttribute.setExceptions(new String[] {"java/lang/Exception"});
-        info.setExceptionsAttribute(exceptionsAttribute);
-        return info;
-    }
-    
-    static String getLambdaClassName(int bootstrap) {
-        return new StringBuilder("lambda$main$").append(bootstrap).toString();
-    }
-
-    static Bytecode toSupplier(Bytecode arg, int bootstrap) {
-        arg.addInvokedynamic(bootstrap, "get", "(Labs/api/Response;)Ljava/util/function/Supplier;");
-        return arg;
-    }
-    
-    static String getCallableDescriptor(String classType) {
-        return new StringBuilder("(").append(classType).append(";)Ljava/util/concurrent/Callable;").toString();
-    }
-
-    static Bytecode toCallable(Bytecode arg, int bootstrap, String callableDescriptor) {
-        arg.addInvokedynamic(bootstrap, "call", callableDescriptor);
-        return arg;
-    }
-
 }
